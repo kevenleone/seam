@@ -69,6 +69,27 @@ has no Tauri dependency, so it is tested directly:
 - `repo.rs` — every operation, each returning an `Undoable`.
 - `ops.rs` — the `Op` enum the renderer sends and the per-repository undo/redo stacks.
 
+`src/ai.rs` is every model Seam can talk to, natively — no sidecar, no SDK:
+the coding agents' own CLIs, headless and read-only in the repository
+(`claude -p`, `codex exec --sandbox read-only`, `opencode run`), and the HTTP
+APIs of Anthropic, OpenAI, Google Gemini and any OpenAI-compatible endpoint
+(Ollama, LM Studio, OpenRouter), called with `reqwest`. API keys live in the
+macOS Keychain (`keyring`), never in a file or in the web views. A new provider
+is a `Provider` variant plus its arm in `ask_harness` or `ask_api`.
+
+`src/review.rs` is the AI review on top of it: it picks the scope (the branch
+against `main`/`master`/…, else uncommitted changes), builds the prompt from the
+review style in Settings › AI, asks for one JSON object of findings and parses
+it leniently. The last review is saved in `.git/seam/review.json`.
+`SEAM_LIVE_AI=claude cargo test --test review -- --ignored` runs a real model
+end to end; any provider id works there.
+
+`src/tray.rs` is the menu bar icon (recent projects, review the last-focused
+repository) and `src/prefs.rs` what the host remembers in the app data folder
+(the AI configuration and recent repositories) — the host owns both because the
+tray needs them with no window open. Closing the last window keeps Seam running;
+only Quit (⌘Q or the tray) exits.
+
 `src/lib.rs` is the Tauri side: commands, the welcome window and one window per
 repository (labelled by a hash of its path), the menu, the file watcher, and
 folders opened from Finder or the Dock. Actions on one repository are serialised
@@ -90,19 +111,30 @@ window flashes white.
 
 ## Styling
 
-Tailwind CSS v4 with Seam's tokens in `src/styles.css`, taken from the design
-canvas. Dark is the reference theme; light mirrors it.
+Tailwind CSS v4 over Seam's tokens (`--app`, `--panel`, `--add-bg`, …), bridged
+in the `@theme inline` block of `src/styles.css`.
 
-- Colours come from tokens (`bg-panel`, `text-muted`, `bg-add-bg`) — never a
-  hex in a component. A new colour is added to **both** `[data-theme]` blocks
-  and bridged in `@theme inline`.
-- There is no `dark:` variant. A theme swaps the whole token map.
-- Additions are blue and deletions orange, never green and red, so the two stay
-  distinct for colour-blind readers.
-- `public/theme.js` applies the saved theme before anything else loads, so the
-  first paint is already right.
+- A theme is a whole token map in `src/lib/themes.ts`. Seam Dark and Seam Light
+  are hand-tuned to the design canvas; the rest are seeds (the dozen colours a
+  palette publishes) expanded by `buildTokens`. Every theme keeps a **blue for
+  additions and an orange for deletions**, never green and red.
+- `applyTheme` (`src/lib/settings.ts`) paints the chosen theme and accent onto
+  the root and caches the map; `public/theme.js` repaints that cache before the
+  bundle loads, so the first frame is already right. A new token is added to
+  `SEAM_DARK`, `SEAM_LIGHT` and `buildTokens`, and bridged in `@theme inline`.
+- Colours come from tokens (`bg-panel`, `text-muted`) — never a hex in a
+  component, and there is no `dark:` variant.
 - An inline `style` is right only for values a class cannot carry (a computed
-  length, a virtualised row offset).
+  length, a virtualised row offset, a swatch previewing a colour).
+
+## Settings
+
+`src/components/settings/` is the settings sheet (⌘,), after Lore's: a rail of
+panes with search, title/description rows with a trailing control. Interface
+preferences live in `localStorage` (`src/lib/settings.ts`, shared by every
+window); what the host needs with no window open — the AI configuration and
+recent repositories — lives in `src-tauri/src/prefs.rs`. A repository window
+shows settings as a sheet; elsewhere they open in their own window.
 
 ## Code Style
 

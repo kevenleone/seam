@@ -3,8 +3,18 @@
 A desktop git client — Tauri 2 + React + TypeScript + Tailwind — for everyday git: stage single
 lines, commit, stash, rename or remove commits, and undo any of it with ⌘Z.
 
-This is the first pass of the Seam design canvas: the git core. AI review, agent sessions, pull
-requests, the three-way conflict view, onboarding and the `seam` CLI come next.
+- **Changes** — stage, unstage or discard single lines and hunks; commit or amend.
+- **History** — ⌘/⇧-click commits to squash, remove, cherry-pick or see their combined diff;
+  rename, revert or reset any commit; branches, stashes and tags.
+- **Review** — an AI review of the branch with comments on the lines they refer to, by the
+  coding agent you already use (Claude Code, Codex, OpenCode) or a model provider under your
+  own key (Anthropic, OpenAI, Google Gemini, or any OpenAI-compatible endpoint such as Ollama).
+- **Menu bar** — recent repositories and a one-click review, with Seam running in the background.
+- **Settings** (⌘,) — 18 themes with separate light and dark picks, accents, AI provider and review
+  style. Expand any diff to fill the window with ⇧⌘E.
+
+Everything runs natively: Rust shells out to your git and to the agents' CLIs, and calls the
+provider APIs directly. Keys stay in the macOS Keychain.
 
 ## Develop
 
