@@ -35,6 +35,7 @@
             "minimumSystemVersion": "13.0",
             "signingIdentity": "-"
         },
+        "resources": ["resources/seam"],
         "targets": ["app", "dmg"]
     },
     "identifier": "app.seam.desktop",

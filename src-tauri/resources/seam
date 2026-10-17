@@ -1,0 +1,24 @@
+#!/bin/sh
+# Goes through `open`, so the app receives folders the same way it does from
+# Finder, whether or not it is already running.
+
+self="$0"
+while [ -L "$self" ]; do
+    target="$(readlink "$self")"
+    case "$target" in
+        /*) self="$target" ;;
+        *) self="$(dirname "$self")/$target" ;;
+    esac
+done
+
+# Seam.app/Contents/Resources/resources/seam
+app="$(cd "$(dirname "$self")/../../.." && pwd)"
+
+for argument in "$@"; do
+    if [ ! -d "$argument" ]; then
+        echo "$(basename "$0"): $argument: not a folder" >&2
+        exit 1
+    fi
+done
+
+exec open -a "$app" "$@"

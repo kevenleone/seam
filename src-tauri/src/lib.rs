@@ -1,4 +1,5 @@
 pub mod ai;
+mod cli;
 pub mod git;
 mod prefs;
 pub mod review;
@@ -829,6 +830,11 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &PredefinedMenuItem::about(app, Some("About Seam"), None)?,
             &PredefinedMenuItem::separator(app)?,
             &item("settings", "Settings…", Some("CmdOrCtrl+,"))?,
+            &item(
+                "install-cli",
+                &format!("Install '{}' Command in PATH", cli::CLI_NAME),
+                None,
+            )?,
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::services(app, None)?,
             &PredefinedMenuItem::separator(app)?,
@@ -931,6 +937,7 @@ fn on_menu(app: &AppHandle, id: &str) {
         "settings" if !focused_window(app).is_some_and(|w| w.label().starts_with("repo-")) => {
             let _ = show_settings(app, None);
         }
+        "install-cli" => cli::install(app),
         "quit" => app.exit(0),
         "welcome" => {
             let _ = show_welcome(app);
@@ -993,6 +1000,8 @@ pub fn run() {
             recent_repositories,
             remove_recent_repository,
             import_recent_repositories,
+            cli::cli_status,
+            cli::set_cli_installed,
         ])
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::Destroyed => {
