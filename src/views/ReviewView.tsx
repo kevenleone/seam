@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import type { Finding, Provider, ProviderStatus, Review, Severity } from '../lib/types';
+import type { Finding, Review, Severity } from '../lib/types';
 
 import { DiffView } from '../components/DiffView';
 import { ExpandButton } from '../components/ExpandButton';
 import { FindingCard } from '../components/FindingCard';
 import { Icon } from '../components/Icon';
+import { ProviderSelect } from '../components/ProviderSelect';
 import { Button, Collapsible, relativeTime, SectionLabel } from '../components/ui';
-import { PROVIDER_LABELS, useAi } from '../lib/ai';
+import { PROVIDER_LABELS } from '../lib/ai';
 import { useSettings } from '../lib/settings';
 import { useSettingsModal } from '../lib/settingsModal';
 import { branchLabel, useRepo } from '../lib/store';
@@ -41,6 +42,50 @@ export function ReviewView() {
                 {shown && <FindingsPanel findings={findings} review={shown} />}
             </Collapsible>
         </>
+    );
+}
+
+/** An AI run in progress, with its clock; the result shows up even after the window closes. */
+export function Running({
+    detail,
+    expected,
+    onCancel,
+    startedAt,
+    title,
+}: {
+    detail: string;
+    expected: string;
+    onCancel(): void;
+    startedAt: number;
+    title: string;
+}) {
+    const [now, setNow] = useState(() => Date.now() / 1000);
+
+    useEffect(() => {
+        const timer = window.setInterval(() => setNow(Date.now() / 1000), 1000);
+
+        return () => window.clearInterval(timer);
+    }, []);
+
+    const elapsed = Math.max(0, Math.round(now - startedAt));
+    const clock = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
+
+    return (
+        <div
+            className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center"
+            role="status"
+        >
+            <span className="h-3 w-3 animate-pulse rounded-full bg-accent" />
+            <h2 className="m-0 text-[16px] font-semibold">{title}</h2>
+            <p className="m-0 text-muted">
+                {detail} · <span className="font-mono">{clock}</span> · {expected}
+            </p>
+            <p className="m-0 max-w-md text-[12px] text-dim">
+                You can close this window; Seam keeps working in the menu bar and the result is here
+                when you come back.
+            </p>
+            <Button onClick={onCancel}>Cancel</Button>
+        </div>
     );
 }
 
@@ -93,25 +138,17 @@ function FindingsPanel({ findings, review }: { findings: Finding[]; review: Revi
     );
 }
 
-function providerOption(provider: ProviderStatus): string {
-    if (provider.kind === 'api' && provider.id !== 'openai-compatible' && !provider.hasKey) {
-        return `${provider.label} (add a key in Settings)`;
-    }
-
-    return provider.available ? provider.label : `${provider.label} (not installed)`;
-}
-
 function ReviewBody({ findings, shown }: { findings: Finding[]; shown: null | Review }) {
     const { cancelReview, dismissFinding, review, reviewFocus, startReview, status } = useRepo();
 
     if (review.status === 'running') {
         return (
             <Running
-                files={review.files}
+                detail={`${review.files} file${review.files === 1 ? '' : 's'}`}
+                expected="most reviews take one to three minutes"
                 onCancel={cancelReview}
-                provider={review.provider}
-                scope={review.scope}
                 startedAt={review.startedAt}
+                title={`${PROVIDER_LABELS[review.provider]} is reviewing ${review.scope}`}
             />
         );
     }
@@ -229,12 +266,8 @@ function ReviewFiles({ findings, review }: { findings: Finding[]; review: Review
 
 function ReviewHeader() {
     const { review, startReview, status } = useRepo();
-    const { config, providers, save } = useAi();
     const shown = review.status === 'done' ? review.review : null;
     const running = review.status === 'running';
-    const usable = providers.filter(
-        (provider) => provider.available || provider.id === config?.provider,
-    );
     const stale = shown?.headSha && status.branch.oid && shown.headSha !== status.branch.oid;
 
     return (
@@ -258,25 +291,7 @@ function ReviewHeader() {
                 <span className="font-semibold">AI review</span>
             )}
             <span className="flex-1" />
-            {config && (
-                <label className="flex items-center gap-1.5 text-[12px] text-muted">
-                    With
-                    <select
-                        className="h-[26px] w-[170px] rounded-md border border-control-line bg-control px-1.5 text-fg"
-                        disabled={running}
-                        onChange={(event) =>
-                            void save({ model: '', provider: event.target.value as Provider })
-                        }
-                        value={config.provider}
-                    >
-                        {usable.map((provider) => (
-                            <option key={provider.id} value={provider.id}>
-                                {providerOption(provider)}
-                            </option>
-                        ))}
-                    </select>
-                </label>
-            )}
+            <ProviderSelect disabled={running} />
             <Button
                 aria-label="AI settings"
                 onClick={() => useSettingsModal.getState().show('ai')}
@@ -296,52 +311,6 @@ function ReviewHeader() {
                 {shown ? 'Re-run review' : `Review ${branchLabel(status)}`}
             </Button>
             {shown && <ExpandButton />}
-        </div>
-    );
-}
-
-function Running({
-    files,
-    onCancel,
-    provider,
-    scope,
-    startedAt,
-}: {
-    files: number;
-    onCancel(): void;
-    provider: Provider;
-    scope: string;
-    startedAt: number;
-}) {
-    const [now, setNow] = useState(() => Date.now() / 1000);
-
-    useEffect(() => {
-        const timer = window.setInterval(() => setNow(Date.now() / 1000), 1000);
-
-        return () => window.clearInterval(timer);
-    }, []);
-
-    const elapsed = Math.max(0, Math.round(now - startedAt));
-    const clock = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
-
-    return (
-        <div
-            className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center"
-            role="status"
-        >
-            <span className="h-3 w-3 animate-pulse rounded-full bg-accent" />
-            <h2 className="m-0 text-[16px] font-semibold">
-                {PROVIDER_LABELS[provider]} is reviewing {scope}
-            </h2>
-            <p className="m-0 text-muted">
-                {files} file{files === 1 ? '' : 's'} · <span className="font-mono">{clock}</span> ·
-                most reviews take one to three minutes
-            </p>
-            <p className="m-0 max-w-md text-[12px] text-dim">
-                You can close this window; Seam keeps working in the menu bar and the review is here
-                when you come back.
-            </p>
-            <Button onClick={onCancel}>Cancel</Button>
         </div>
     );
 }
