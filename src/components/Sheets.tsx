@@ -1,9 +1,7 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useState } from 'react';
 
-import type { PullMode, ResetMode } from '../lib/types';
+import type { ResetMode } from '../lib/types';
 
-import { api } from '../lib/api';
-import { updateSettings, useSettings } from '../lib/settings';
 import { branchLabel, isPushed, type Sheet, useRepo } from '../lib/store';
 import { Button, Checkbox, Modal, TextArea, TextField } from './ui';
 
@@ -86,67 +84,6 @@ const validRef = (name: string) => {
 
     return !!n && !/\s|\.\.|^-|\/$|\.lock$|[~^:?*[\\]/.test(n);
 };
-
-export function SettingsSheet({ close }: { close: () => void }) {
-    const settings = useSettings();
-    const [version, setVersion] = useState('');
-
-    useEffect(() => {
-        void api
-            .setGitPath(settings.gitPath || null)
-            .then(() =>
-                api.gitVersion().then(setVersion, () => setVersion('Git not found at this path')),
-            );
-    }, [settings.gitPath]);
-
-    return (
-        <Modal onClose={close} title="Settings" width={500}>
-            <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] text-muted">Git executable</span>
-                <TextField
-                    onChange={(event) => updateSettings({ gitPath: event.target.value })}
-                    placeholder="/usr/bin/git"
-                    value={settings.gitPath}
-                />
-                <span className="text-[12px] text-dim">{version || ' '}</span>
-            </label>
-            <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] text-muted">When pulling</span>
-                <select
-                    className="h-8 rounded-[7px] border border-control-line bg-app px-2"
-                    onChange={(event) =>
-                        updateSettings({ pullMode: event.target.value as PullMode })
-                    }
-                    value={settings.pullMode}
-                >
-                    <option value="fastForwardOnly">Fast-forward only</option>
-                    <option value="rebase">Rebase local commits</option>
-                    <option value="merge">Merge</option>
-                </select>
-            </label>
-            <label className="flex flex-col gap-1.5">
-                <span className="text-[12px] text-muted">Code size · {settings.codeSize}px</span>
-                <input
-                    className="accent-[var(--accent)]"
-                    max={18}
-                    min={10}
-                    onChange={(event) => updateSettings({ codeSize: Number(event.target.value) })}
-                    step={0.5}
-                    type="range"
-                    value={settings.codeSize}
-                />
-            </label>
-            <span className="text-[12px] text-muted">
-                Seam runs this git for every action, with your config, hooks and credential helpers.
-            </span>
-            <div className="flex justify-end">
-                <Button onClick={close} variant="primary">
-                    Done
-                </Button>
-            </div>
-        </Modal>
-    );
-}
 
 function joinMessage(summary: string, body: string) {
     const b = body.trim();
@@ -464,8 +401,6 @@ function SheetBody({ close, sheet }: { close: () => void; sheet: Sheet }) {
             return <Reset close={close} sheet={sheet} />;
         case 'reword':
             return <Reword close={close} sheet={sheet} />;
-        case 'settings':
-            return <SettingsSheet close={close} />;
         case 'squash':
             return <Squash close={close} shas={sheet.shas} />;
         case 'stash':

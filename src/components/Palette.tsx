@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { api } from '../lib/api';
 import { getSettings, recentRepositories } from '../lib/settings';
-import { isPushed, repoName, useRepo } from '../lib/store';
+import { useSettingsModal } from '../lib/settingsModal';
+import { branchLabel, isPushed, repoName, useRepo } from '../lib/store';
 import { Icon } from './Icon';
 
 interface Command {
@@ -140,7 +141,7 @@ export function Palette() {
 
 function commands(): Command[] {
     const s = useRepo.getState();
-    const { inProgress, lastCommit, meta, status } = s;
+    const { inProgress, lastCommit, meta, review, status } = s;
     const sheet = (next: Parameters<typeof s.set>[0]['sheet']) => () => s.set({ sheet: next });
     const list: Command[] = [];
     const add = (command: Command | false | null | undefined) => command && list.push(command);
@@ -278,6 +279,21 @@ function commands(): Command[] {
     add({ group: 'History', id: 'redo', keys: '⇧⌘Z', run: s.redo, title: 'Redo' });
 
     add({
+        group: 'Review',
+        hint: review.status === 'running' ? 'running…' : 'with the agent chosen in Settings',
+        id: 'review',
+        keys: '⇧⌘R',
+        run: () => s.startReview(),
+        title: `Review ${branchLabel(status)} with AI`,
+    });
+    add({
+        group: 'Review',
+        id: 'show-review',
+        keys: '⌘3',
+        run: () => s.set({ tab: 'review' }),
+        title: 'Show review',
+    });
+    add({
         group: 'View',
         id: 'changes',
         keys: '⌘1',
@@ -301,7 +317,7 @@ function commands(): Command[] {
         group: 'View',
         id: 'settings',
         keys: '⌘,',
-        run: sheet({ kind: 'settings' }),
+        run: () => useSettingsModal.getState().show(),
         title: 'Settings…',
     });
 

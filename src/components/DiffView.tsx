@@ -1,12 +1,21 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-import type { DiffLine, FileDiff, Hunk, LineAction } from '../lib/types';
+import type { ReviewFocus } from '../lib/store';
+import type { DiffLine, FileDiff, Finding, Hunk, LineAction } from '../lib/types';
 
 import { useSettings } from '../lib/settings';
 import { isChange } from '../lib/store';
+import { FindingCard } from './FindingCard';
 import { Icon } from './Icon';
 import { Button } from './ui';
+
+/** Review findings shown under the lines they refer to. */
+export interface DiffComments {
+    findings: Finding[];
+    focus: null | ReviewFocus;
+    onDismiss(id: number): void;
+}
 
 /** Line staging controls. Without it the diff is read-only. */
 export interface DiffInteraction {
@@ -19,15 +28,18 @@ export interface DiffInteraction {
 
 type Row =
     | { collapsed: boolean; diff: FileDiff; t: 'file' }
+    | { finding: Finding; t: 'comment' }
     | { hunk: Hunk; left: DiffLine | null; right: DiffLine | null; t: 'split' }
     | { hunk: Hunk; line: DiffLine; t: 'line' }
     | { hunk: Hunk; t: 'hunk' }
     | { t: 'note'; text: string };
 
 export function DiffView({
+    comments,
     diffs,
     interaction,
 }: {
+    comments?: DiffComments;
     diffs: FileDiff[];
     interaction?: DiffInteraction;
 }) {
@@ -43,6 +55,22 @@ export function DiffView({
         for (const diff of diffs) {
             const id = diff.newPath ?? diff.oldPath ?? '';
             const isCollapsed = collapsed.has(id);
+            const fileFindings = comments?.findings.filter((finding) => finding.file === id) ?? [];
+            const newLines = new Set(
+                diff.hunks.flatMap((hunk) => hunk.lines.map((line) => line.newNumber)),
+            );
+            // Findings on a line the diff doesn't show go at the top of the file.
+            const placed = new Set(
+                fileFindings
+                    .filter((finding) => newLines.has(finding.line))
+                    .map((finding) => finding.id),
+            );
+            const commentsAt = (newNumber: null | number) =>
+                newNumber === null
+                    ? []
+                    : fileFindings
+                          .filter((finding) => placed.has(finding.id) && finding.line === newNumber)
+                          .map((finding): Row => ({ finding, t: 'comment' }));
 
             if (multi) {
                 rows.push({ collapsed: isCollapsed, diff, t: 'file' });
@@ -50,6 +78,10 @@ export function DiffView({
 
             if (isCollapsed) {
                 continue;
+            }
+
+            for (const finding of fileFindings.filter((candidate) => !placed.has(candidate.id))) {
+                rows.push({ finding, t: 'comment' });
             }
 
             if (diff.isBinary) {
@@ -67,10 +99,17 @@ export function DiffView({
                 rows.push({ hunk, t: 'hunk' });
 
                 if (splitDiff) {
-                    rows.push(...splitRows(hunk));
+                    for (const row of splitRows(hunk)) {
+                        rows.push(row);
+
+                        if (row.t === 'split') {
+                            rows.push(...commentsAt(row.right?.newNumber ?? null));
+                        }
+                    }
                 } else {
                     for (const line of hunk.lines) {
                         rows.push({ hunk, line, t: 'line' });
+                        rows.push(...commentsAt(line.kind === 'deletion' ? null : line.newNumber));
                     }
                 }
 
@@ -81,7 +120,7 @@ export function DiffView({
         }
 
         return { maxChars, rows };
-    }, [diffs, splitDiff, collapsed, multi]);
+    }, [diffs, splitDiff, collapsed, multi, comments?.findings]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const virtualizer = useVirtualizer({
@@ -93,10 +132,36 @@ export function DiffView({
                   ? 32
                   : rows[index].t === 'note'
                     ? 64
-                    : lineHeight,
+                    : rows[index].t === 'comment'
+                      ? 140
+                      : lineHeight,
         getScrollElement: () => scrollRef.current,
         overscan: 30,
     });
+
+    const focus = comments?.focus;
+
+    useEffect(() => {
+        if (!focus) {
+            return;
+        }
+
+        const exact = rows.findIndex(
+            (row) =>
+                row.t === 'comment' &&
+                row.finding.file === focus.file &&
+                row.finding.line === focus.line,
+        );
+        const file = rows.findIndex(
+            (row) => row.t === 'file' && (row.diff.newPath ?? row.diff.oldPath) === focus.file,
+        );
+        const index = exact >= 0 ? exact : file;
+
+        if (index >= 0) {
+            virtualizer.scrollToIndex(index, { align: exact >= 0 ? 'center' : 'start' });
+        }
+        // Keyed on the nonce: only a new focus request should scroll, not every re-render.
+    }, [focus?.nonce]);
 
     const toggleFile = (id: string) =>
         setCollapsed((prev) => {
@@ -154,6 +219,13 @@ export function DiffView({
                             )}
                             {row.t === 'hunk' && (
                                 <HunkHeader hunk={row.hunk} interaction={interaction} />
+                            )}
+                            {row.t === 'comment' && comments && (
+                                <FindingCard
+                                    finding={row.finding}
+                                    inline
+                                    onDismiss={() => comments.onDismiss(row.finding.id)}
+                                />
                             )}
                             {row.t === 'note' && (
                                 <div className="flex h-16 items-center justify-center font-sans text-muted">

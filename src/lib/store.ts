@@ -5,11 +5,14 @@ import type {
     Detail,
     FileChange,
     FileDiff,
+    Finding,
     HistoryMeta,
     InProgress,
     LineAction,
     Op,
+    Provider,
     RepoStatus,
+    ReviewState,
     Stash,
 } from './types';
 
@@ -21,6 +24,13 @@ export type HistoryDetail =
     | { kind: 'commit'; sha: string }
     | { kind: 'stash'; stash: Stash };
 
+/** A finding the diff should scroll to; `nonce` re-triggers the same one. */
+export interface ReviewFocus {
+    file: string;
+    line: null | number;
+    nonce: number;
+}
+
 export type Sheet =
     | { changes: FileChange[]; kind: 'discard' }
     | { commit: Commit; kind: 'reset' }
@@ -30,11 +40,10 @@ export type Sheet =
     | { kind: 'deleteBranch'; name: string }
     | { kind: 'drop'; shas: string[] }
     | { kind: 'renameBranch'; name: string; upstream: null | string }
-    | { kind: 'settings' }
     | { kind: 'squash'; shas: string[] }
     | { kind: 'stash'; paths: string[] };
 
-export type Tab = 'changes' | 'history';
+export type Tab = 'changes' | 'history' | 'review';
 
 export interface Toast {
     id: number;
@@ -56,24 +65,30 @@ export type RepoStore = Actions & State;
 
 interface Actions {
     applyLines(action: LineAction, hunks?: number[]): void;
+    cancelReview(): void;
     commit(andPush?: boolean): void;
+    dismissFinding(id: number): void;
     fetch(): void;
+    focusFinding(finding: Finding): void;
     init(root: string): Promise<void>;
     loadDiff(): Promise<void>;
     loadMore(): Promise<void>;
+    loadReview(): Promise<void>;
     perform(op: Op, label: string): void;
     pull(): void;
     push(force?: boolean): void;
     redo(): void;
     refreshHistory(): Promise<void>;
     refreshStatus(): Promise<void>;
-
     select(change: FileChange | null): void;
+
     set(patch: Partial<State>): void;
     setAmend(amend: boolean): void;
     /** Ticks commits in History; two or more show their combined diff. */
     setChecked(shas: string[]): void;
     showDetail(detail: HistoryDetail | null): void;
+    /** Starts an AI review of the current branch with `provider`, or the one chosen in Settings. */
+    startReview(provider?: Provider): void;
     toggleLine(hunk: number, line: number, range: boolean): void;
     undo(): void;
     viewHistory(ref: string): void;
@@ -84,24 +99,30 @@ interface State {
     baseBranch: null | string;
     baseCommit: null | string;
     body: string;
-
     busy: null | string;
     checked: string[];
     commits: Commit[];
     detail: HistoryDetail | null;
+
     detailData: Detail | null;
     diff: FileDiff | null;
+    /** Findings hidden in this window, by id, for the review being shown. */
+    dismissed: number[];
     error: null | string;
+    /** Everything but the diff slides away (⇧⌘E, esc to come back). */
+    expanded: boolean;
     hasMore: boolean;
     historyRef: string;
     inProgress: InProgress | null;
     lastCommit: Commit | null;
-
     lineSelection: Record<number, number[]>;
     loaded: boolean;
+
     meta: HistoryMeta;
     palette: boolean;
     progress: null | string;
+    review: ReviewState;
+    reviewFocus: null | ReviewFocus;
     root: string;
     savedMessage: [string, string] | null;
     selected: FileChange | null;
@@ -196,6 +217,9 @@ export const useRepo = create<RepoStore>()((set, get) => {
         baseCommit: null,
         body: '',
         busy: null,
+        cancelReview() {
+            void api.cancelReview(get().root);
+        },
         checked: [],
         commit(andPush = false) {
             const { amend, body, busy, status, summary } = get();
@@ -221,21 +245,39 @@ export const useRepo = create<RepoStore>()((set, get) => {
         detail: null,
         detailData: null,
         diff: null,
+        dismissed: [],
+
+        dismissFinding(id) {
+            set({ dismissed: [...get().dismissed, id] });
+        },
         error: null,
+        expanded: false,
         fetch() {
             get().perform({ type: 'fetch' }, 'Fetching');
         },
+
+        focusFinding(finding) {
+            set({ reviewFocus: { file: finding.file, line: finding.line, nonce: Date.now() } });
+        },
+
         hasMore: false,
+
         historyRef: 'HEAD',
+
         async init(root) {
             set({ root });
             await get().refreshStatus();
             set({ loaded: true });
             await get().refreshHistory();
+            await get().loadReview();
         },
+
         inProgress: null,
+
         lastCommit: null,
+
         lineSelection: {},
+
         async loadDiff() {
             const { root, selected } = get();
 
@@ -288,6 +330,21 @@ export const useRepo = create<RepoStore>()((set, get) => {
 
             set({ commits: [...commits, ...more], hasMore: more.length === PAGE });
         },
+        async loadReview() {
+            try {
+                const review = await api.reviewState(get().root);
+                const previous = get().review;
+                // A new review brings back findings dismissed from the previous one.
+                const fresh =
+                    review.status === 'done' &&
+                    (previous.status !== 'done' ||
+                        previous.review.createdAt !== review.review.createdAt);
+
+                set(fresh ? { dismissed: [], review } : { review });
+            } catch (error) {
+                set({ error: errorMessage(error) });
+            }
+        },
         meta: { branches: [], remotes: [], stashes: [], tags: [], unpushed: [] },
         palette: false,
         perform(op, label) {
@@ -303,15 +360,12 @@ export const useRepo = create<RepoStore>()((set, get) => {
         pull() {
             get().perform({ mode: getSettings().pullMode, type: 'pull' }, 'Pulling');
         },
-
         push(force = false) {
             get().perform({ force, type: 'push' }, force ? 'Force pushing' : 'Pushing');
         },
-
         redo() {
             enqueue('Redoing', () => api.redo(get().root));
         },
-
         async refreshHistory() {
             const { root } = get();
 
@@ -381,6 +435,10 @@ export const useRepo = create<RepoStore>()((set, get) => {
                 set({ error: errorMessage(e) });
             }
         },
+
+        review: { status: 'idle' },
+
+        reviewFocus: null,
 
         root: '',
 
@@ -476,6 +534,12 @@ export const useRepo = create<RepoStore>()((set, get) => {
                     }
                 })
                 .catch((error) => set({ error: errorMessage(error) }));
+        },
+
+        startReview(provider) {
+            set({ tab: 'review' });
+            // A review that can't start is recorded as failed and shown in the Review tab.
+            api.startReview(get().root, provider ?? null).catch(() => get().loadReview());
         },
 
         status: emptyStatus,

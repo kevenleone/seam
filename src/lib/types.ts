@@ -1,5 +1,11 @@
 // Mirrors src-tauri/src/git/models.rs (serde camelCase).
 
+export interface AiConfig {
+    baseUrl: string;
+    model: string;
+    provider: Provider;
+    review: ReviewStyle;
+}
 export interface Branch {
     ahead: number;
     behind: number;
@@ -11,6 +17,7 @@ export interface Branch {
     upstream: null | string;
     upstreamGone: boolean;
 }
+
 export interface BranchStatus {
     ahead: number;
     behind: number;
@@ -83,6 +90,16 @@ export interface FileDiff {
     oldPath: null | string;
 }
 
+export interface Finding {
+    body: string;
+    file: string;
+    id: number;
+    line: null | number;
+    severity: Severity;
+    suggestion: null | string;
+    title: string;
+}
+
 export interface HistoryMeta {
     branches: Branch[];
     remotes: Remote[];
@@ -106,9 +123,7 @@ export type InProgress =
     | { kind: 'cherryPick' }
     | { kind: 'merge' }
     | { kind: 'revert' };
-
 export type LineAction = 'discard' | 'stage' | 'unstage';
-
 export type LineKind = 'addition' | 'context' | 'deletion' | 'noNewline';
 /** Every action the backend can perform and undo; mirrors `Op` in ops.rs. */
 export type Op =
@@ -151,7 +166,22 @@ export interface Outcome {
     message: string;
     undoable: boolean;
 }
+
+export type Provider =
+    'anthropic' | 'claude' | 'codex' | 'google' | 'openai-compatible' | 'openai' | 'opencode';
+
+export interface ProviderStatus {
+    available: boolean;
+    defaultModel: null | string;
+    hasKey: boolean;
+    id: Provider;
+    kind: 'api' | 'harness';
+    label: string;
+    path: null | string;
+}
+
 export type PullMode = 'fastForwardOnly' | 'merge' | 'rebase';
+
 export interface Remote {
     name: string;
     url: string;
@@ -166,6 +196,35 @@ export interface RepoStatus {
 }
 
 export type ResetMode = 'hard' | 'mixed' | 'soft';
+
+export interface Review {
+    commits: number;
+    createdAt: number;
+    diffs: FileDiff[];
+    durationMs: number;
+    findings: Finding[];
+    headSha: null | string;
+    provider: Provider;
+    scope: string;
+    summary: string;
+    truncated: boolean;
+}
+
+export type ReviewFocusArea = 'breaking' | 'bugs' | 'performance' | 'security' | 'style' | 'tests';
+
+export type ReviewState =
+    | { files: number; provider: Provider; scope: string; startedAt: number; status: 'running' }
+    | { message: string; previous: null | Review; provider: Provider; status: 'failed' }
+    | { review: Review; status: 'done' }
+    | { status: 'idle' };
+
+export interface ReviewStyle {
+    focus: ReviewFocusArea[];
+    language: string;
+    level: 'balanced' | 'blockers' | 'thorough';
+}
+
+export type Severity = 'check' | 'note' | 'risk';
 
 export interface Snapshot {
     inProgress: InProgress | null;
@@ -183,4 +242,9 @@ export interface Stash {
 export interface Tag {
     name: string;
     sha: string;
+}
+
+export interface TestResult {
+    durationMs: number;
+    reply: string;
 }

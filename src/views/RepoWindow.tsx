@@ -5,23 +5,36 @@ import { useEffect, useState } from 'react';
 
 import { Icon } from '../components/Icon';
 import { Palette } from '../components/Palette';
+import { SettingsModal } from '../components/settings/SettingsModal';
 import { Sheets } from '../components/Sheets';
 import { Button } from '../components/ui';
 import { api } from '../lib/api';
-import { addRecent, getSettings, type Theme, updateSettings, useSettings } from '../lib/settings';
-import { branchLabel, changeCount, repoName, useRepo } from '../lib/store';
+import { getSettings, syncRecents, type Theme, updateSettings, useSettings } from '../lib/settings';
+import { useSettingsModal } from '../lib/settingsModal';
+import { branchLabel, changeCount, repoName, type Tab, useRepo } from '../lib/store';
 import { useAppVersion } from '../lib/version';
 import { ChangesView } from './ChangesView';
 import { HistoryView } from './HistoryView';
+import { ReviewView } from './ReviewView';
 
 export function RepoWindow({ root }: { root: string }) {
     const tab = useRepo((state) => state.tab);
     const loaded = useRepo((state) => state.loaded);
     const palette = useRepo((state) => state.palette);
+    const expanded = useRepo((state) => state.expanded);
+    const { statusBar } = useSettings();
 
     useEffect(() => {
-        addRecent(root);
+        void syncRecents();
         void getCurrentWebviewWindow().setTitle(repoName(root));
+
+        // The tray opens a window straight onto its review with ?tab=review.
+        const initialTab = new URLSearchParams(location.search).get('tab');
+
+        if (initialTab === 'review' || initialTab === 'history') {
+            useRepo.getState().set({ tab: initialTab });
+        }
+
         void useRepo.getState().init(root);
         void api.watch(root);
 
@@ -44,13 +57,26 @@ export function RepoWindow({ root }: { root: string }) {
                 useRepo.getState().set({ progress: event.payload }),
             ),
             win.listen<string>('menu', (event) => onMenu(event.payload)),
+            win.listen<Tab>('show-tab', (event) => useRepo.getState().set({ tab: event.payload })),
+            listen<string>('review-updated', (event) => {
+                if (event.payload === root) {
+                    void useRepo.getState().loadReview();
+                }
+            }),
             listen('tauri://focus', () => void useRepo.getState().refreshStatus()),
         ];
 
         const onKey = (event: KeyboardEvent) => {
             const s = useRepo.getState();
+            const modal = useSettingsModal.getState().open;
 
-            if (!event.metaKey) {
+            if (event.key === 'Escape' && s.expanded && !s.sheet && !s.palette && !modal) {
+                s.set({ expanded: false });
+
+                return;
+            }
+
+            if (!event.metaKey || modal) {
                 return;
             }
 
@@ -100,12 +126,19 @@ export function RepoWindow({ root }: { root: string }) {
             <Header />
             <Banners />
             <main className="flex min-h-0 flex-1">
-                {tab === 'changes' ? <ChangesView /> : <HistoryView />}
+                {tab === 'changes' ? (
+                    <ChangesView />
+                ) : tab === 'history' ? (
+                    <HistoryView />
+                ) : (
+                    <ReviewView />
+                )}
             </main>
-            <StatusBar />
+            {statusBar && !expanded && <StatusBar />}
             <ToastView />
             {palette && <Palette />}
             <Sheets />
+            <SettingsModal />
         </div>
     );
 }
@@ -262,7 +295,7 @@ function Header() {
                 aria-label="Views"
                 className="flex gap-0.5 rounded-[7px] border border-control-line bg-control p-0.5"
             >
-                {(['changes', 'history'] as const).map((option) => (
+                {(['changes', 'history', 'review'] as const).map((option) => (
                     <button
                         aria-current={s.tab === option ? 'page' : undefined}
                         className={`rounded-[5px] px-2.5 py-1 ${s.tab === option ? 'bg-tab text-fg' : 'text-muted hover:text-fg'}`}
@@ -270,10 +303,11 @@ function Header() {
                         onClick={() => s.set({ tab: option })}
                         type="button"
                     >
-                        {option === 'changes' ? 'Changes' : 'History'}
+                        {{ changes: 'Changes', history: 'History', review: 'Review' }[option]}
                         {option === 'changes' && count > 0 && (
                             <span className="ml-1.5 text-accent">{count}</span>
                         )}
+                        {option === 'review' && <ReviewBadge />}
                     </button>
                 ))}
             </nav>
@@ -322,6 +356,8 @@ function onMenu(id: string) {
     const s = useRepo.getState();
 
     switch (id) {
+        case 'expand-diff':
+            return s.set({ expanded: !s.expanded });
         case 'fetch':
             return s.fetch();
         case 'new-branch':
@@ -334,8 +370,10 @@ function onMenu(id: string) {
             return s.push();
         case 'reveal':
             return void revealItemInDir(s.root);
+        case 'review-branch':
+            return s.startReview();
         case 'settings':
-            return s.set({ sheet: { kind: 'settings' } });
+            return useSettingsModal.getState().show();
         case 'stage-all':
             return s.perform({ type: 'stageAll' }, 'Staging');
         case 'stash':
@@ -352,6 +390,8 @@ function onMenu(id: string) {
             return s.set({ tab: 'changes' });
         case 'view-history':
             return s.set({ tab: 'history' });
+        case 'view-review':
+            return s.set({ tab: 'review' });
     }
 }
 
@@ -375,6 +415,29 @@ function PanelToggle({ side }: { side: 'left' | 'right' }) {
             <Icon name={side === 'left' ? 'sidebarLeft' : 'sidebarRight'} size={14} />
         </Button>
     );
+}
+
+/** A pulsing dot while a review runs, then how many findings are still open. */
+function ReviewBadge() {
+    const review = useRepo((state) => state.review);
+    const dismissed = useRepo((state) => state.dismissed);
+
+    if (review.status === 'running') {
+        return (
+            <span
+                aria-label="Review running"
+                className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent align-[2px]"
+            />
+        );
+    }
+
+    if (review.status !== 'done') {
+        return null;
+    }
+
+    const open = review.review.findings.filter((finding) => !dismissed.includes(finding.id)).length;
+
+    return open > 0 ? <span className="ml-1.5 text-accent">{open}</span> : null;
 }
 
 function StatusBar() {
