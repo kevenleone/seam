@@ -128,8 +128,14 @@ export type InProgress =
     | { kind: 'cherryPick' }
     | { kind: 'merge' }
     | { kind: 'revert' };
+
 export type LineAction = 'discard' | 'stage' | 'unstage';
 export type LineKind = 'addition' | 'context' | 'deletion' | 'noNewline';
+export interface NotifyPrefs {
+    banner: boolean;
+    /** A macOS system sound by name, or empty for none. */
+    sound: string;
+}
 /** Every action the backend can perform and undo; mirrors `Op` in ops.rs. */
 export type Op =
     | {
@@ -227,6 +233,14 @@ export interface ReviewStyle {
     focus: ReviewFocusArea[];
     language: string;
     level: 'balanced' | 'blockers' | 'thorough';
+}
+
+export interface ScopeSummary {
+    additions: number;
+    commits: number;
+    deletions: number;
+    files: number;
+    label: string;
 }
 
 export type Severity = 'check' | 'note' | 'risk';
@@ -409,19 +423,22 @@ export interface VisualSide {
 
 export type VisualState =
     | {
-          kind: VisualKind;
-          message: string;
-          previous: null | Visual;
-          provider: Provider;
-          status: 'failed';
-      }
-    | {
+          /** `%h %s` lines, newest first. */
+          commits: string[];
+          diffs: FileDiff[];
           kind: VisualKind;
           prompt: null | string;
           provider: Provider;
           scope: string;
           startedAt: number;
           status: 'running';
+      }
+    | {
+          kind: VisualKind;
+          message: string;
+          previous: null | Visual;
+          provider: Provider;
+          status: 'failed';
       }
     | { status: 'done'; visual: Visual }
     | { status: 'idle' };

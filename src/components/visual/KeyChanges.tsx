@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 
 import type { DiffLine, FileDiff, Finding, VisualAnnotation, VisualDiff } from '../../lib/types';
 
-import { DiffView } from '../DiffView';
 import { Note } from './Blocks';
+import { DiffPanel } from './DiffPanel';
 import { Inline } from './Markdown';
 import { useVisual } from './mode';
 
@@ -54,8 +54,6 @@ function DiffHeader({ block, diff }: { block: VisualDiff; diff: FileDiff }) {
     );
 }
 
-const PANEL_LIMIT = 520;
-
 function DiffTabs({ shown }: { shown: { block: VisualDiff; diff: FileDiff }[] }) {
     const [active, setActive] = useState(0);
     const [dismissed, setDismissed] = useState<Record<string, number[]>>({});
@@ -97,24 +95,18 @@ function DiffTabs({ shown }: { shown: { block: VisualDiff; diff: FileDiff }[] })
                     <Inline className="text-[12.5px] text-muted" text={block.summary} />
                 </div>
             )}
-            <div
-                className="flex flex-col bg-app"
-                style={{ height: panelHeight(diff, notes.length) }}
-            >
-                <DiffView
-                    comments={{
-                        findings: notes,
-                        focus: null,
-                        onDismiss: (id) =>
-                            setDismissed({
-                                ...dismissed,
-                                [block.file]: [...(dismissed[block.file] ?? []), id],
-                            }),
-                    }}
-                    diffs={[diff]}
-                    key={block.file}
-                />
-            </div>
+            <DiffPanel
+                comments={{
+                    findings: notes,
+                    focus: null,
+                    onDismiss: (id) =>
+                        setDismissed({
+                            ...dismissed,
+                            [block.file]: [...(dismissed[block.file] ?? []), id],
+                        }),
+                }}
+                diff={diff}
+            />
         </section>
     );
 }
@@ -129,13 +121,6 @@ function findings(block: VisualDiff): Finding[] {
         suggestion: null,
         title: annotation.note,
     }));
-}
-
-/** Tall enough for a short diff and its notes, scrolling past `PANEL_LIMIT`. */
-function panelHeight(diff: FileDiff, notes: number): number {
-    const lines = diff.hunks.reduce((sum, hunk) => sum + hunk.lines.length + 1, 0);
-
-    return Math.min(PANEL_LIMIT, 48 + lines * 22 + notes * 110);
 }
 
 function pathOf(diff: FileDiff): string {

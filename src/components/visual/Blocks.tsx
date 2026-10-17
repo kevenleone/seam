@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 
 import type {
+    FileDiff,
     VisualAnnotation,
     VisualCanvas,
     VisualChange,
@@ -17,6 +18,7 @@ import type {
 
 import { CHANGE_LABELS, surfaceOf } from '../../lib/visual';
 import { ScreenFrame, StateChip } from './Canvas';
+import { DiffPanel } from './DiffPanel';
 import { Inline, Prose } from './Markdown';
 import { useVisual } from './mode';
 
@@ -316,31 +318,67 @@ export function DecisionCard({ block }: { block: VisualDecision }) {
     );
 }
 
-export function FileTreeCard({ block }: { block: VisualFileTree }) {
+export function FileTreeCard({ block, diffs }: { block: VisualFileTree; diffs: FileDiff[] }) {
+    const { mode } = useVisual();
+    const [open, setOpen] = useState<string[]>([]);
     const files = [...block.files].sort((first, second) => first.path.localeCompare(second.path));
 
     return (
-        <section className={`${CARD} flex flex-col py-1.5`}>
+        <section className={`${CARD} flex flex-col overflow-hidden py-1.5`}>
             {files.map((file) => {
                 const slash = file.path.lastIndexOf('/');
+                const diff =
+                    mode === 'app'
+                        ? diffs.find((each) => (each.newPath ?? each.oldPath) === file.path)
+                        : undefined;
+                const shown = !!diff && open.includes(file.path);
 
                 return (
-                    <div className="flex flex-col gap-0.5 px-4 py-1.5" key={file.path}>
-                        <div className="flex items-center gap-2">
-                            <ChangeChip change={file.change} />
-                            <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]">
-                                <span className="text-muted">{file.path.slice(0, slash + 1)}</span>
-                                {file.path.slice(slash + 1)}
-                            </span>
-                            {(file.additions > 0 || file.deletions > 0) && (
-                                <span className="shrink-0 font-mono text-[11.5px]">
-                                    <span className="text-add">+{file.additions}</span>{' '}
-                                    <span className="text-del">−{file.deletions}</span>
+                    <div className="flex flex-col" key={file.path}>
+                        <div className="flex flex-col gap-0.5 px-4 py-1.5">
+                            <div className="flex items-center gap-2">
+                                <ChangeChip change={file.change} />
+                                <span className="min-w-0 flex-1 truncate font-mono text-[12.5px]">
+                                    <span className="text-muted">
+                                        {file.path.slice(0, slash + 1)}
+                                    </span>
+                                    {file.path.slice(slash + 1)}
                                 </span>
+                                {(file.additions > 0 || file.deletions > 0) && (
+                                    <span className="shrink-0 font-mono text-[11.5px]">
+                                        <span className="text-add">+{file.additions}</span>{' '}
+                                        <span className="text-del">−{file.deletions}</span>
+                                    </span>
+                                )}
+                                {diff && (
+                                    <button
+                                        aria-expanded={shown}
+                                        className="shrink-0 rounded-md px-2 py-0.5 text-[12px] text-muted hover:bg-hover hover:text-fg"
+                                        onClick={() =>
+                                            setOpen(
+                                                shown
+                                                    ? open.filter((path) => path !== file.path)
+                                                    : [...open, file.path],
+                                            )
+                                        }
+                                        title={`${shown ? 'Hide' : 'Show'} what changed in ${file.path}`}
+                                        type="button"
+                                    >
+                                        {shown ? 'Hide diff' : 'Diff'}
+                                    </button>
+                                )}
+                            </div>
+                            {file.note && (
+                                <Inline
+                                    className="pl-0.5 text-[12.5px] text-muted"
+                                    text={file.note}
+                                />
                             )}
                         </div>
-                        {file.note && (
-                            <Inline className="pl-0.5 text-[12.5px] text-muted" text={file.note} />
+                        {diff && shown && (
+                            <div className="my-1.5 border-y border-line">
+                                <DiffPanel diff={diff} />
+                            </div>
                         )}
                     </div>
                 );
