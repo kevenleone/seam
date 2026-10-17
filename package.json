@@ -44,6 +44,9 @@
         "format:check": "prettier --check .",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
+        "site:build": "vite build site",
+        "site:dev": "vite site",
+        "site:preview": "vite preview site",
         "tauri": "tauri",
         "test": "cd src-tauri && cargo test",
         "typecheck": "tsc --noEmit"

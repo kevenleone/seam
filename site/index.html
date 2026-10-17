@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Seam: everyday git, undoable</title>
+        <meta
+            name="description"
+            content="Seam is a native git client for macOS. Stage single lines, rewrite any commit, undo anything with ⌘Z, and review branches with the AI you already use."
+        />
+        <meta name="theme-color" content="#121317" media="(prefers-color-scheme: dark)" />
+        <meta name="theme-color" content="#fbfaf7" media="(prefers-color-scheme: light)" />
+        <meta property="og:title" content="Seam" />
+        <meta
+            property="og:description"
+            content="A native git client for macOS. Everyday git, undoable."
+        />
+        <meta property="og:type" content="website" />
+        <link rel="icon" type="image/svg+xml" href="../app-icon.svg" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="./styles.css" />
+        <script type="module" src="./main.ts"></script>
+    </head>
+
+    <body>
+        <header class="sticky top-0 z-10 border-b border-border/60 bg-page/85 backdrop-blur-md">
+            <nav class="mx-auto flex h-16 max-w-[1200px] items-center gap-8 px-4 md:px-8">
+                <a class="flex items-center gap-2.5" href="#top" aria-label="Seam home">
+                    <svg class="size-8" viewBox="0 0 100 100" aria-hidden="true">
+                        <rect width="100" height="100" rx="22" fill="#16171C" />
+                        <rect x="16" y="20" width="29" height="60" rx="6" fill="#183154" />
+                        <rect x="55" y="20" width="29" height="60" rx="6" fill="#3E2515" />
+                        <rect x="22" y="30" width="16" height="4" rx="2" fill="#6CB6FF" />
+                        <rect x="22" y="40" width="12" height="4" rx="2" fill="#6CB6FF" />
+                        <rect x="62" y="56" width="16" height="4" rx="2" fill="#F0A060" />
+                        <rect x="62" y="66" width="10" height="4" rx="2" fill="#F0A060" />
+                        <path
+                            d="M42 30l16 7M42 44l16 7M42 58l16 7"
+                            stroke="#B9A8FF"
+                            stroke-width="4.5"
+                            stroke-linecap="round"
+                        />
+                    </svg>
+                    <span class="text-xl font-semibold tracking-tight">Seam</span>
+                </a>
+
+                <div class="ml-auto hidden items-center gap-7 text-sm text-text2 md:flex">
+                    <a class="transition-colors hover:text-text" href="#changes">Changes</a>
+                    <a class="transition-colors hover:text-text" href="#history">History</a>
+                    <a class="transition-colors hover:text-text" href="#review">Review</a>
+                    <a
+                        class="transition-colors hover:text-text"
+                        href="https://github.com/kevenleone/seam"
+                        >GitHub</a
+                    >
+                </div>
+
+                <a
+                    class="ml-auto inline-flex h-9 items-center rounded-full bg-accent px-4 text-sm font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98] md:ml-0"
+                    data-download
+                    href="https://github.com/kevenleone/seam/releases/latest"
+                    >Download for macOS</a
+                >
+            </nav>
+        </header>
+
+        <main id="top" class="overflow-x-clip">
+            <section class="mx-auto max-w-[1200px] px-4 pt-16 text-center md:px-8 md:pt-24">
+                <p class="font-mono text-sm text-text3">
+                    <span class="rounded bg-add-bg px-1.5 text-add">+ stage a line</span>
+                    <span class="rounded bg-del-bg px-1.5 text-del">− undo anything</span>
+                </p>
+                <h1
+                    class="mx-auto mt-6 max-w-[18ch] text-5xl leading-[1.05] font-semibold tracking-tight text-balance md:text-6xl"
+                >
+                    Everyday git, undoable.
+                </h1>
+                <p class="mx-auto mt-6 max-w-[56ch] text-lg leading-relaxed text-pretty text-text2">
+                    Seam is a native git client for macOS. Stage single lines, rewrite any commit
+                    and press ⌘Z when you change your mind. Before you merge, the AI you already use
+                    reviews the branch and leaves comments on the lines that need a look.
+                </p>
+                <div class="mt-9 flex flex-wrap items-center justify-center gap-3">
+                    <a
+                        class="inline-flex h-12 items-center rounded-full bg-accent px-6 font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
+                        data-download
+                        href="https://github.com/kevenleone/seam/releases/latest"
+                        >Download for macOS</a
+                    >
+                    <a
+                        class="inline-flex h-12 items-center rounded-full border border-border bg-panel px-6 font-medium transition hover:border-text3 active:scale-[0.98]"
+                        href="https://github.com/kevenleone/seam"
+                        >View source</a
+                    >
+                </div>
+                <p class="mt-4 text-sm text-text3" data-release-note>
+                    Free and open source. For Apple silicon and Intel Macs.
+                </p>
+
+                <figure class="mt-14 md:mt-16">
+                    <img
+                        class="h-auto w-full rounded-xl border border-border shadow-shot"
+                        src="../docs/images/changes.png"
+                        width="2880"
+                        height="1800"
+                        fetchpriority="high"
+                        alt="Seam's Changes view: the changed files on the left, a diff with four lines selected to unstage, and the commit message on the right."
+                    />
+                </figure>
+            </section>
+
+            <section
+                id="changes"
+                class="mx-auto max-w-[1200px] scroll-mt-20 px-4 py-24 md:px-8 md:py-32"
+            >
+                <div class="grid items-center gap-12 md:grid-cols-[4fr_8fr]">
+                    <div>
+                        <h2 class="text-3xl font-semibold tracking-tight md:text-4xl">
+                            Stage exactly what you mean.
+                        </h2>
+                        <p class="mt-4 text-lg leading-relaxed text-text2">
+                            Click a line number to pick a line, shift-click for a range, and stage,
+                            unstage or discard just those. Seam runs the git already on your Mac, so
+                            your hooks, config and credentials behave the way they do in Terminal.
+                        </p>
+                    </div>
+                    <figure data-reveal>
+                        <img
+                            class="h-auto w-full rounded-xl border border-border shadow-shot"
+                            src="../docs/images/changes-light.png"
+                            width="2880"
+                            height="1800"
+                            loading="lazy"
+                            alt="The same Changes view in the light theme."
+                        />
+                    </figure>
+                </div>
+            </section>
+
+            <section id="history" class="scroll-mt-16 bg-band py-24 md:py-32">
+                <div class="mx-auto max-w-[1200px] px-4 md:px-8">
+                    <div class="max-w-[640px]">
+                        <h2 class="text-3xl font-semibold tracking-tight md:text-4xl">
+                            Rewrite history without the fear.
+                        </h2>
+                        <p class="mt-4 text-lg leading-relaxed text-text2">
+                            ⌘-click commits to see what they change together, then squash, remove or
+                            cherry-pick them. Rename any commit, revert it, or reset the branch to
+                            it. Every one of those can be undone with ⌘Z, and Seam tells you when a
+                            commit is already on the remote.
+                        </p>
+                    </div>
+                    <figure class="mt-12" data-reveal>
+                        <img
+                            class="h-auto w-full rounded-xl border border-border shadow-shot"
+                            src="../docs/images/history.png"
+                            width="2880"
+                            height="1800"
+                            loading="lazy"
+                            alt="The History view with three commits ticked and their combined diff, plus branches, a stash and a tag in the sidebar."
+                        />
+                    </figure>
+                </div>
+            </section>
+
+            <section
+                id="review"
+                class="mx-auto max-w-[1200px] scroll-mt-20 px-4 py-24 md:px-8 md:py-32"
+            >
+                <div class="max-w-[680px]">
+                    <h2 class="text-3xl font-semibold tracking-tight md:text-4xl">
+                        A review before you merge.
+                    </h2>
+                    <p class="mt-4 text-lg leading-relaxed text-text2">
+                        Seam hands the branch to the coding agent you already use, signed in as you,
+                        or to a model provider under your own key. Comments land on the lines they
+                        are about, sorted into risks, checks and notes. You choose what it looks for
+                        and how picky it is.
+                    </p>
+                    <ul class="mt-6 flex flex-wrap gap-2 text-sm" aria-label="Supported models">
+                        <li class="rounded-full border border-border px-3 py-1">Claude Code</li>
+                        <li class="rounded-full border border-border px-3 py-1">Codex</li>
+                        <li class="rounded-full border border-border px-3 py-1">OpenCode</li>
+                        <li class="rounded-full border border-border px-3 py-1">Anthropic</li>
+                        <li class="rounded-full border border-border px-3 py-1">OpenAI</li>
+                        <li class="rounded-full border border-border px-3 py-1">Google Gemini</li>
+                        <li class="rounded-full border border-border px-3 py-1">
+                            Ollama and LM Studio
+                        </li>
+                    </ul>
+                </div>
+                <figure class="mt-12" data-reveal>
+                    <img
+                        class="h-auto w-full rounded-xl border border-border shadow-shot"
+                        src="../docs/images/review.png"
+                        width="2880"
+                        height="1800"
+                        loading="lazy"
+                        alt="The Review tab: a comment from Claude Code under a changed line, and the summary and findings on the right."
+                    />
+                </figure>
+            </section>
+
+            <section class="bg-band py-24 md:py-32">
+                <div class="mx-auto max-w-[1200px] px-4 md:px-8">
+                    <div class="max-w-[640px]">
+                        <h2 class="text-3xl font-semibold tracking-tight md:text-4xl">
+                            Make it yours.
+                        </h2>
+                        <p class="mt-4 text-lg leading-relaxed text-text2">
+                            Eighteen themes, with separate picks for light and dark, and an accent
+                            of your own. Additions stay blue and deletions orange in every one, so a
+                            diff reads the same for everyone.
+                        </p>
+                    </div>
+                    <div class="mt-12 grid gap-6 md:grid-cols-2">
+                        <figure data-reveal>
+                            <img
+                                class="h-auto w-full rounded-xl border border-border shadow-shot"
+                                src="../docs/images/settings-appearance.png"
+                                width="2880"
+                                height="1800"
+                                loading="lazy"
+                                alt="Settings, Appearance: colour mode cards and a gallery of theme previews."
+                            />
+                        </figure>
+                        <figure data-reveal>
+                            <img
+                                class="h-auto w-full rounded-xl border border-border shadow-shot"
+                                src="../docs/images/theme-tokyo-night.png"
+                                width="2880"
+                                height="1800"
+                                loading="lazy"
+                                alt="Seam in the Tokyo Night theme with a teal accent."
+                            />
+                        </figure>
+                    </div>
+                </div>
+            </section>
+
+            <section class="mx-auto max-w-[1200px] px-4 py-24 md:px-8 md:py-32">
+                <div class="grid gap-10 md:grid-cols-3">
+                    <div>
+                        <h3 class="text-lg font-semibold">Your git, not ours</h3>
+                        <p class="mt-2 leading-relaxed text-text2">
+                            Every action runs the git you already have. Nothing is reimplemented and
+                            nothing is hidden.
+                        </p>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold">Nothing leaves without you</h3>
+                        <p class="mt-2 leading-relaxed text-text2">
+                            No account and no telemetry. Code only goes to a model when you start a
+                            review, and keys stay in the macOS Keychain.
+                        </p>
+                    </div>
+                    <div>
+                        <h3 class="text-lg font-semibold">Always there</h3>
+                        <p class="mt-2 leading-relaxed text-text2">
+                            Seam lives in the menu bar, with your recent repositories and a review
+                            of the current branch one click away.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-24 flex flex-col items-center gap-4 text-center">
+                    <h2 class="text-3xl font-semibold tracking-tight md:text-4xl">
+                        Try it on your next branch.
+                    </h2>
+                    <a
+                        class="inline-flex h-12 items-center rounded-full bg-accent px-6 font-semibold text-on-accent transition hover:brightness-110 active:scale-[0.98]"
+                        data-download
+                        href="https://github.com/kevenleone/seam/releases/latest"
+                        >Download for macOS</a
+                    >
+                </div>
+            </section>
+        </main>
+
+        <footer class="border-t border-border">
+            <div
+                class="mx-auto flex max-w-[1200px] flex-wrap items-center gap-4 px-4 py-8 text-sm text-text3 md:px-8"
+            >
+                <span>Seam is free software under the AGPL-3.0.</span>
+                <span class="flex-1"></span>
+                <a class="hover:text-text" href="https://github.com/kevenleone/seam">Source</a>
+                <a class="hover:text-text" href="https://github.com/kevenleone/seam/releases"
+                    >Releases</a
+                >
+                <a class="hover:text-text" href="https://github.com/kevenleone/seam/issues"
+                    >Issues</a
+                >
+            </div>
+        </footer>
+    </body>
+</html>

@@ -1,0 +1,100 @@
+/* The app lives in the same repo; scanning it would pull its classes in. */
+@import 'tailwindcss' source(none);
+
+@source './index.html';
+
+/* Seam Dark and Seam Light from src/lib/themes.ts, narrowed to what the page paints. */
+:root {
+    --page: #121317;
+    --band: #16171c;
+    --panel: #1d1f26;
+    --text: #e7e5e0;
+    --text2: #b3b4bc;
+    --text3: #8b8c95;
+    --border: #2a2c34;
+    --accent: #b9a8ff;
+    --on-accent: #17142a;
+    --add: #6cb6ff;
+    --add-bg: #13243a;
+    --del: #f0a060;
+    --del-bg: #2d1b10;
+    --shot-shadow: 0 40px 90px -30px rgba(0, 0, 0, 0.8), 0 8px 20px rgba(0, 0, 0, 0.4);
+
+    color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+    :root {
+        --page: #fbfaf7;
+        --band: #f3f2ee;
+        --panel: #ffffff;
+        --text: #1b1b1f;
+        --text2: #4a4b52;
+        --text3: #6b6c74;
+        --border: #e2e0da;
+        --accent: #6b55d6;
+        --on-accent: #ffffff;
+        --add: #0b5cad;
+        --add-bg: #e4effb;
+        --del: #a3500f;
+        --del-bg: #fcede1;
+        --shot-shadow: 0 40px 90px -30px rgba(24, 24, 48, 0.4), 0 8px 20px rgba(24, 24, 48, 0.08);
+
+        color-scheme: light;
+    }
+}
+
+@theme inline {
+    --color-page: var(--page);
+    --color-band: var(--band);
+    --color-panel: var(--panel);
+    --color-text: var(--text);
+    --color-text2: var(--text2);
+    --color-text3: var(--text3);
+    --color-border: var(--border);
+    --color-accent: var(--accent);
+    --color-on-accent: var(--on-accent);
+    --color-add: var(--add);
+    --color-add-bg: var(--add-bg);
+    --color-del: var(--del);
+    --color-del-bg: var(--del-bg);
+    --font-sans: 'IBM Plex Sans', -apple-system, 'Helvetica Neue', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+    --shadow-shot: var(--shot-shadow);
+}
+
+@layer base {
+    body {
+        background: var(--page);
+        color: var(--text);
+        font-family: var(--font-sans);
+        -webkit-font-smoothing: antialiased;
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+    }
+}
+
+/* Screenshots ease in as they scroll into view; still for anyone who asked for less motion. */
+.js [data-reveal] {
+    opacity: 0;
+    transform: translateY(16px);
+    transition:
+        opacity 0.6s ease,
+        transform 0.6s ease;
+}
+
+.js [data-reveal].is-visible {
+    opacity: 1;
+    transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .js [data-reveal] {
+        opacity: 1;
+        transform: none;
+        transition: none;
+    }
+}

@@ -12,3 +12,4 @@ src-tauri/target
 # each version heading. Prettier rewrites both, so formatting this file produces
 # a diff that the next release reverses — every release, forever.
 CHANGELOG.md
+site/dist
