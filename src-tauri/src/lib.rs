@@ -341,6 +341,16 @@ async fn file_diff(
     Repo::new(root).diff(&path, source, ignore_whitespace).await
 }
 
+#[tauri::command]
+async fn blob(
+    root: String,
+    object: String,
+    path: Option<String>,
+) -> CmdResult<tauri::ipc::Response> {
+    let bytes = Repo::new(root).blob(&object, path.as_deref()).await?;
+    Ok(tauri::ipc::Response::new(bytes))
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct HistoryMeta {
@@ -1314,6 +1324,7 @@ pub fn run() {
             git_version,
             snapshot,
             file_diff,
+            blob,
             history_meta,
             log,
             merge_base,

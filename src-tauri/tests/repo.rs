@@ -469,3 +469,68 @@ async fn ops_history_undo_redo() {
     history.record_redo(op, u);
     assert_eq!(t.subjects().await[0], "Empty");
 }
+
+fn blob_ids(diff: &FileDiff) -> (Option<String>, Option<String>) {
+    let line = diff
+        .header_lines
+        .iter()
+        .find_map(|line| line.strip_prefix("index "))
+        .unwrap();
+    let range = line.split(' ').next().unwrap();
+    let (before, after) = range.split_once("..").unwrap();
+    let present = |id: &str| (!id.chars().all(|c| c == '0')).then(|| id.to_string());
+    (present(before), present(after))
+}
+
+#[tokio::test]
+async fn blob_reads_both_sides_of_a_binary_diff() {
+    let t = T::new().await;
+    let old = b"\x89PNG\0old".to_vec();
+    let new = b"\x89PNG\0new".to_vec();
+    std::fs::write(t.root.join("img.png"), &old).unwrap();
+    t.repo.run(&["add", "--", "img.png"]).await.unwrap();
+    t.repo.run(&["commit", "-q", "-m", "Image"]).await.unwrap();
+
+    std::fs::write(t.root.join("img.png"), &new).unwrap();
+    let diff = t
+        .repo
+        .diff("img.png", DiffSource::Unstaged, false)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(diff.is_binary);
+    let (before, after) = blob_ids(&diff);
+    assert_eq!(t.repo.blob(&before.unwrap(), None).await.unwrap(), old);
+    let after = after.unwrap();
+    assert!(t.repo.blob(&after, None).await.is_err());
+    assert_eq!(t.repo.blob(&after, Some("img.png")).await.unwrap(), new);
+
+    t.repo.run(&["add", "--", "img.png"]).await.unwrap();
+    let staged = t
+        .repo
+        .diff("img.png", DiffSource::Staged, false)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        t.repo
+            .blob(&blob_ids(&staged).1.unwrap(), None)
+            .await
+            .unwrap(),
+        new
+    );
+
+    std::fs::write(t.root.join("new.png"), &old).unwrap();
+    let untracked = t
+        .repo
+        .diff("new.png", DiffSource::Untracked, false)
+        .await
+        .unwrap()
+        .unwrap();
+    let (before, after) = blob_ids(&untracked);
+    assert!(before.is_none());
+    assert_eq!(
+        t.repo.blob(&after.unwrap(), Some("new.png")).await.unwrap(),
+        old
+    );
+}
