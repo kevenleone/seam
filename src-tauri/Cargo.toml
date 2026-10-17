@@ -1,6 +1,6 @@
 [package]
 name = "seam"
-version = "0.1.0" # x-release-please-version
+version = "0.2.0" # x-release-please-version
 description = "Seam — everyday git, undoable"
 edition = "2021"
 
