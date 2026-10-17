@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 
 import type { Branch, Commit } from '../lib/types';
 
 import { DiffView } from '../components/DiffView';
+import { ExpandButton } from '../components/ExpandButton';
 import { Icon } from '../components/Icon';
 import { Button, Collapsible, relativeTime, SectionLabel } from '../components/ui';
 import { useSettings } from '../lib/settings';
@@ -52,13 +53,16 @@ export function ContextMenu({
 
 export function HistoryView() {
     const { leftPanel } = useSettings();
+    const expanded = useRepo((state) => state.expanded);
 
     return (
         <>
-            <Collapsible open={leftPanel} width={250}>
+            <Collapsible open={leftPanel && !expanded} width={250}>
                 <Sidebar />
             </Collapsible>
-            <CommitList />
+            <Collapsible open={!expanded} width={440}>
+                <CommitList />
+            </Collapsible>
             <Detail />
         </>
     );
@@ -145,17 +149,48 @@ function CommitList() {
             ? branchLabel(status)
             : historyRef.replace(/^refs\/(heads|remotes)\//, '');
 
-    const toggle = (sha: string) =>
+    const anchor = useRef<null | string>(null);
+
+    const toggle = (sha: string) => {
+        anchor.current = sha;
         s.setChecked(
             checked.includes(sha)
                 ? checked.filter((checkedSha) => checkedSha !== sha)
                 : [...checked, sha],
         );
+    };
+
+    // ⌘-click ticks one commit, ⇧-click ticks the run from the last one ticked; a plain click opens it.
+    const onRowClick = (event: React.MouseEvent, sha: string) => {
+        if (event.metaKey) {
+            toggle(sha);
+
+            return;
+        }
+
+        const from = anchor.current
+            ? commits.findIndex((commit) => commit.sha === anchor.current)
+            : -1;
+
+        if (event.shiftKey && from >= 0) {
+            const to = commits.findIndex((commit) => commit.sha === sha);
+            const range = commits
+                .slice(Math.min(from, to), Math.max(from, to) + 1)
+                .map((commit) => commit.sha);
+
+            s.setChecked([...new Set([...checked, ...range])]);
+
+            return;
+        }
+
+        anchor.current = sha;
+        s.showDetail({ kind: 'commit', sha });
+    };
 
     return (
         <section
             aria-label="Commits"
-            className="flex w-[440px] shrink-0 flex-col border-r border-line"
+            className="flex h-full w-[440px] flex-col border-r border-line"
         >
             {checked.length > 0 ? (
                 <div className="flex flex-wrap items-center gap-2 border-b border-accent-line bg-accent-bg px-3.5 py-2.5">
@@ -201,7 +236,7 @@ function CommitList() {
                     )}
                     <span className="flex-1" />
                     <span className="truncate text-[12px] text-muted">
-                        Tick commits to squash, remove or cherry-pick them.
+                        ⌘-click or ⇧-click commits to squash, remove or cherry-pick them.
                     </span>
                 </div>
             )}
@@ -223,8 +258,8 @@ function CommitList() {
                                 </div>
                             )}
                             <div
-                                className={`flex cursor-default items-center gap-3 border-b border-line/60 px-3.5 py-2 ${active ? 'bg-selected' : 'hover:bg-hover'}`}
-                                onClick={() => s.showDetail({ kind: 'commit', sha: commit.sha })}
+                                className={`flex cursor-default items-center gap-3 border-b border-line/60 px-3.5 py-2 ${active ? 'bg-selected' : checked.includes(commit.sha) ? 'bg-accent-bg' : 'hover:bg-hover'}`}
+                                onClick={(event) => onRowClick(event, commit.sha)}
                                 onContextMenu={(event) => {
                                     event.preventDefault();
                                     s.showDetail({ kind: 'commit', sha: commit.sha });
@@ -292,7 +327,7 @@ function CommitList() {
 
 function Detail() {
     const s = useRepo();
-    const { commits, detail, detailData, historyRef, meta, status } = s;
+    const { commits, detail, detailData, expanded, historyRef, meta, status } = s;
     const current = viewingCurrent(historyRef, status.branch.head);
 
     if (!detail) {
@@ -421,10 +456,23 @@ function Detail() {
 
     return (
         <section aria-label="Commit detail" className="flex min-w-0 flex-1 flex-col">
-            <div className="flex max-h-[45%] shrink-0 flex-col gap-2.5 overflow-auto border-b border-line px-[18px] py-3.5">
-                {header}
-                <Files />
-            </div>
+            {expanded ? (
+                <div className="flex shrink-0 items-center gap-2 border-b border-line px-[18px] py-2">
+                    <span className="min-w-0 flex-1 truncate font-semibold">
+                        {detailData.commit?.subject ??
+                            (detail.kind === 'stash' ? detail.stash.message : 'Combined diff')}
+                    </span>
+                    <ExpandButton />
+                </div>
+            ) : (
+                <div className="relative flex max-h-[45%] shrink-0 flex-col gap-2.5 overflow-auto border-b border-line py-3.5 pr-14 pl-[18px]">
+                    <span className="absolute top-2.5 right-3">
+                        <ExpandButton />
+                    </span>
+                    {header}
+                    <Files />
+                </div>
+            )}
             <DiffView diffs={detailData.diffs} />
         </section>
     );

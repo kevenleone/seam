@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { ChangeKind, FileChange } from '../lib/types';
 
 import { type DiffInteraction, DiffView } from '../components/DiffView';
+import { ExpandButton } from '../components/ExpandButton';
 import { Icon } from '../components/Icon';
 import { Button, Checkbox, Collapsible, relativeTime, SectionLabel } from '../components/ui';
 import { updateSettings, useSettings } from '../lib/settings';
@@ -12,18 +13,19 @@ import { isPushed, useRepo } from '../lib/store';
 export function ChangesView() {
     const { leftPanel, rightPanel } = useSettings();
     const staged = useRepo((state) => state.status.staged.length);
+    const expanded = useRepo((state) => state.expanded);
 
     return (
         <>
-            <Collapsible open={leftPanel} width={264}>
+            <Collapsible open={leftPanel && !expanded} width={264}>
                 <FileList />
             </Collapsible>
             <DiffPane />
-            <Collapsible open={rightPanel} width={330}>
+            <Collapsible open={rightPanel && !expanded} width={330}>
                 <CommitPanel />
             </Collapsible>
             {/* While the commit panel is hidden, a rail on the right edge brings it back. */}
-            <Collapsible open={!rightPanel} width={36}>
+            <Collapsible open={!rightPanel && !expanded} width={36}>
                 <button
                     aria-label="Show commit panel"
                     className="flex h-full w-full flex-col items-center gap-3 border-l border-line bg-panel py-3 text-muted hover:bg-hover hover:text-fg"
@@ -339,6 +341,7 @@ function DiffPane() {
                 >
                     <Icon name="external" size={13} />
                 </Button>
+                <ExpandButton />
             </div>
             {selected.area === 'conflicted' ? (
                 <ConflictPanel change={selected} />
