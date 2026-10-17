@@ -1,21 +1,27 @@
-import { getVersion } from '@tauri-apps/api/app';
+import { getName, getVersion } from '@tauri-apps/api/app';
 import { useEffect, useState } from 'react';
 
-let cached: string | undefined;
+function cachedHook(load: () => Promise<string>): () => string {
+    let cached: string | undefined;
 
-export function useAppVersion(): string {
-    const [version, setVersion] = useState(cached ?? '');
+    return function useCached(): string {
+        const [value, setValue] = useState(cached ?? '');
 
-    useEffect(() => {
-        if (cached) {
-            return;
-        }
+        useEffect(() => {
+            if (cached) {
+                return;
+            }
 
-        void getVersion().then((value) => {
-            cached = value;
-            setVersion(value);
-        });
-    }, []);
+            void load().then((loaded) => {
+                cached = loaded;
+                setValue(loaded);
+            });
+        }, []);
 
-    return version;
+        return value;
+    };
 }
+
+export const useAppName = cachedHook(getName);
+
+export const useAppVersion = cachedHook(getVersion);
