@@ -503,6 +503,34 @@ async fn ask_api(config: &AiConfig, prompt: &str) -> Result<String> {
         .ok_or_else(|| GitError::new(format!("{} returned an empty answer.", provider.label())))
 }
 
+/// Pulls one JSON object out of a model's answer, tolerating colours, fences and stray prose.
+pub fn json_object<T: serde::de::DeserializeOwned>(answer: &str) -> Option<T> {
+    let cleaned = strip_ansi(answer);
+    let candidates = [
+        cleaned.trim().to_string(),
+        cleaned
+            .split("```")
+            .nth(1)
+            .map(|block| block.trim_start_matches("json").trim().to_string())
+            .unwrap_or_default(),
+        match (cleaned.find('{'), cleaned.rfind('}')) {
+            (Some(start), Some(end)) if end > start => cleaned[start..=end].to_string(),
+            _ => String::new(),
+        },
+    ];
+    candidates
+        .iter()
+        .find_map(|candidate| serde_json::from_str(candidate).ok())
+}
+
+/// The error for an answer that held no usable JSON, with the start of what came back.
+pub fn not_json(answer: &str) -> GitError {
+    let preview: String = strip_ansi(answer).trim().chars().take(400).collect();
+    GitError::new(format!(
+        "The agent's answer wasn't the expected JSON:\n{preview}"
+    ))
+}
+
 pub fn strip_ansi(text: &str) -> String {
     let mut out = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
