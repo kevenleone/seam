@@ -1,6 +1,7 @@
 pub mod ai;
 mod cli;
 pub mod git;
+mod notify;
 mod prefs;
 pub mod review;
 mod tray;
@@ -18,7 +19,7 @@ use git::models::*;
 use git::ops::{self, History, Op, Outcome};
 use git::{GitError, Repo};
 use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode, DebounceEventResult, Debouncer};
-use prefs::PrefsStore;
+use prefs::{NotifyPrefs, PrefsStore};
 use review::ReviewState;
 use serde::Serialize;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
@@ -27,7 +28,7 @@ use tauri::{
     WebviewWindow, WebviewWindowBuilder, Window,
 };
 use tauri_plugin_dialog::DialogExt;
-use visual::{PlanSummary, Visual, VisualKind, VisualState};
+use visual::{PlanSummary, ScopeSummary, Visual, VisualKind, VisualState};
 
 type CmdResult<T> = Result<T, GitError>;
 
@@ -642,6 +643,7 @@ async fn start_review_task(app: &AppHandle, root: PathBuf, config: AiConfig) -> 
                 previous,
             },
         };
+        notify_review(&handle, &task_root, &state);
         let app_state = handle.state::<AppState>();
         app_state
             .reviews
@@ -710,6 +712,13 @@ fn previous_visual(state: VisualState) -> Option<Visual> {
 #[tauri::command]
 async fn visual_state(app: AppHandle, root: String, kind: VisualKind) -> VisualState {
     visual_state_for(&app, Path::new(&root), kind).await
+}
+
+/// What a recap would cover right now; an error when there is nothing to recap.
+#[tauri::command]
+async fn visual_scope(root: String) -> CmdResult<ScopeSummary> {
+    let scope = review::scope(&Repo::new(Path::new(&root))).await?;
+    Ok(ScopeSummary::of(&scope))
 }
 
 #[tauri::command]
@@ -788,6 +797,8 @@ async fn start_visual(
             scope: scope.label.clone(),
             prompt: prompt.clone(),
             started_at: review::now_secs(),
+            commits: scope.commits.clone(),
+            diffs: scope.diffs.clone(),
         },
     );
 
@@ -815,6 +826,7 @@ async fn start_visual(
             .lock()
             .unwrap()
             .remove(&(task_root.clone(), kind));
+        notify_visual(&handle, &task_root, &state);
         set_visual(&handle, &task_root, kind, state);
     });
     app.state::<AppState>()
@@ -877,6 +889,81 @@ async fn export_visual(
 #[tauri::command]
 fn print_window(window: WebviewWindow) -> CmdResult<()> {
     window.print().map_err(|e| GitError::new(e.to_string()))
+}
+
+// MARK: Commands: notifications
+
+fn repo_name(root: &Path) -> String {
+    root.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_else(|| root.to_string_lossy().into_owned())
+}
+
+fn first_line(message: &str) -> String {
+    message
+        .lines()
+        .next()
+        .unwrap_or_default()
+        .chars()
+        .take(160)
+        .collect()
+}
+
+fn notify_review(app: &AppHandle, root: &Path, state: &ReviewState) {
+    let (title, body) = match state {
+        ReviewState::Done { review } => (
+            format!("Review of {} is ready", review.scope),
+            match review.findings.len() {
+                0 => format!("No findings · {}", repo_name(root)),
+                1 => format!("1 finding · {}", repo_name(root)),
+                count => format!("{count} findings · {}", repo_name(root)),
+            },
+        ),
+        ReviewState::Failed { message, .. } => ("Review failed".into(), first_line(message)),
+        _ => return,
+    };
+    notify::finished(app, root, &title, &body);
+}
+
+fn notify_visual(app: &AppHandle, root: &Path, state: &VisualState) {
+    let (title, body) = match state {
+        VisualState::Done { visual } => (
+            match visual.kind {
+                VisualKind::Recap => format!("Recap of {} is ready", visual.scope),
+                VisualKind::Plan => "Plan is ready".into(),
+            },
+            format!("{} · {}", visual.title, repo_name(root)),
+        ),
+        VisualState::Failed { kind, message, .. } => (
+            match kind {
+                VisualKind::Recap => "Recap failed".into(),
+                VisualKind::Plan => "Plan failed".into(),
+            },
+            first_line(message),
+        ),
+        _ => return,
+    };
+    notify::finished(app, root, &title, &body);
+}
+
+#[tauri::command]
+fn notify_prefs(prefs: State<'_, PrefsStore>) -> NotifyPrefs {
+    prefs.notify()
+}
+
+#[tauri::command]
+fn set_notify_prefs(prefs: State<'_, PrefsStore>, notify: NotifyPrefs) {
+    prefs.set_notify(notify);
+}
+
+#[tauri::command]
+fn play_sound(sound: String) {
+    notify::play(&sound);
+}
+
+#[tauri::command]
+fn sounds() -> Vec<&'static str> {
+    notify::SOUNDS.to_vec()
 }
 
 // MARK: Commands: AI
@@ -1193,6 +1280,7 @@ pub fn run() {
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .manage(AppState::default())
         .menu(build_menu)
         .on_menu_event(|app, event| on_menu(app, event.id().as_ref()))
@@ -1233,11 +1321,16 @@ pub fn run() {
             import_recent_repositories,
             visual_state,
             visual_plans,
+            visual_scope,
             open_visual_plan,
             start_visual,
             cancel_visual,
             export_visual,
             print_window,
+            notify_prefs,
+            set_notify_prefs,
+            play_sound,
+            sounds,
             cli::cli_status,
             cli::set_cli_installed,
         ])

@@ -1,4 +1,5 @@
-//! What Seam remembers between launches: the AI configuration and recent repositories.
+//! What Seam remembers between launches: the AI configuration, how it tells you an AI run
+//! finished, and recent repositories.
 //! Kept by the host rather than the web views, because the tray needs it with no window open.
 
 use std::path::{Path, PathBuf};
@@ -14,7 +15,27 @@ const MAX_RECENTS: usize = 12;
 #[serde(default, rename_all = "camelCase")]
 struct Prefs {
     ai: AiConfig,
+    notify: NotifyPrefs,
     recents: Vec<String>,
+}
+
+/// What happens when a review, recap or plan finishes.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct NotifyPrefs {
+    /// A system notification, shown while the repository's window isn't in front.
+    pub banner: bool,
+    /// A macOS system sound by name (`Glass`, `Ping`…), or empty for none.
+    pub sound: String,
+}
+
+impl Default for NotifyPrefs {
+    fn default() -> Self {
+        NotifyPrefs {
+            banner: true,
+            sound: "Glass".into(),
+        }
+    }
 }
 
 pub struct PrefsStore {
@@ -56,6 +77,14 @@ impl PrefsStore {
 
     pub fn set_ai(&self, ai: AiConfig) {
         self.update(|prefs| prefs.ai = ai);
+    }
+
+    pub fn notify(&self) -> NotifyPrefs {
+        self.prefs.lock().unwrap().notify.clone()
+    }
+
+    pub fn set_notify(&self, notify: NotifyPrefs) {
+        self.update(|prefs| prefs.notify = notify);
     }
 
     /// Recent repositories that still exist, newest first.
