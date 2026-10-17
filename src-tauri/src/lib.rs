@@ -922,6 +922,9 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 }
 
 fn on_menu(app: &AppHandle, id: &str) {
+    if tray::is_tray_event(id) {
+        return;
+    }
     match id {
         "open" => pick_and_open(app),
         // A repository window shows settings as a sheet over itself; anywhere else gets the window.

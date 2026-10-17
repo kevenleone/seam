@@ -108,7 +108,7 @@ fn menu(
         targets.len() - 1
     };
     let item = |id: String, text: String, enabled: bool| {
-        MenuItem::with_id(app, id, text, enabled, None::<&str>)
+        MenuItem::with_id(app, tray_id(&id), text, enabled, None::<&str>)
     };
     let mut items: Vec<Box<dyn IsMenuItem<Wry>>> = Vec::new();
 
@@ -192,7 +192,7 @@ fn menu(
     )?));
     items.push(Box::new(MenuItem::with_id(
         app,
-        "settings",
+        tray_id("settings"),
         "Settings…",
         true,
         Some("CmdOrCtrl+,"),
@@ -200,7 +200,7 @@ fn menu(
     items.push(Box::new(PredefinedMenuItem::separator(app)?));
     items.push(Box::new(MenuItem::with_id(
         app,
-        "quit",
+        tray_id("quit"),
         "Quit Seam",
         true,
         Some("CmdOrCtrl+Q"),
@@ -211,7 +211,22 @@ fn menu(
     Menu::with_items(app, &refs)
 }
 
+/// Tauri hands every menu event, the menu bar's included, to every menu handler. The prefix
+/// keeps the app menu's ⌘, and this menu's Settings… from both acting on one press.
+const PREFIX: &str = "tray:";
+
+fn tray_id(id: &str) -> String {
+    format!("{PREFIX}{id}")
+}
+
+pub fn is_tray_event(id: &str) -> bool {
+    id.starts_with(PREFIX)
+}
+
 fn on_menu(app: &AppHandle, id: &str) {
+    let Some(id) = id.strip_prefix(PREFIX) else {
+        return;
+    };
     let target = |index: &str| -> Option<PathBuf> {
         let index: usize = index.parse().ok()?;
         app.state::<AppState>()
