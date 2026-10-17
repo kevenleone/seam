@@ -150,8 +150,8 @@ function ReviewBody({ findings, shown }: { findings: Finding[]; shown: null | Re
                     </h2>
                     <p className="m-0 max-w-md leading-normal text-muted">
                         Seam hands the branch's changes against its base to the model you chose in
-                        Settings — a coding agent you already use, signed in as you, or a provider
-                        under your own key — and puts its comments on the lines that need a look.
+                        Settings (a coding agent you already use, signed in as you, or a provider
+                        under your own key) and puts its comments on the lines that need a look.
                     </p>
                     <Button onClick={() => startReview()} variant="primary">
                         Review {branchLabel(status)}
@@ -262,7 +262,7 @@ function ReviewHeader() {
                 <label className="flex items-center gap-1.5 text-[12px] text-muted">
                     With
                     <select
-                        className="h-[26px] rounded-md border border-control-line bg-control px-1.5 text-fg"
+                        className="h-[26px] w-[170px] rounded-md border border-control-line bg-control px-1.5 text-fg"
                         disabled={running}
                         onChange={(event) =>
                             void save({ model: '', provider: event.target.value as Provider })

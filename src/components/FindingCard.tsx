@@ -32,26 +32,27 @@ export function FindingCard({
                 className="flex max-w-[720px] flex-col gap-2 rounded-lg border border-accent-line bg-accent-bg px-3 py-2.5 text-[13px]"
                 style={{ boxShadow: `inset 3px 0 0 ${severities[finding.severity].rail}` }}
             >
-                <header className="flex items-center gap-2">
+                <header className="flex items-start gap-2">
                     <SeverityChip severity={finding.severity} />
-                    {onFocus ? (
-                        <button
-                            className="min-w-0 truncate text-left font-semibold hover:text-accent-strong"
-                            onClick={onFocus}
-                            title={`Show ${location}`}
-                            type="button"
-                        >
-                            {finding.title}
-                        </button>
-                    ) : (
-                        <span className="min-w-0 truncate font-semibold">{finding.title}</span>
-                    )}
-                    <span className="flex-1" />
-                    {!inline && (
-                        <span className="shrink-0 truncate font-mono text-[11px] text-muted">
-                            {location}
-                        </span>
-                    )}
+                    <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        {onFocus ? (
+                            <button
+                                className="text-left font-semibold hover:text-accent-strong"
+                                onClick={onFocus}
+                                title={`Show ${location}`}
+                                type="button"
+                            >
+                                {finding.title}
+                            </button>
+                        ) : (
+                            <span className="font-semibold">{finding.title}</span>
+                        )}
+                        {!inline && (
+                            <span className="truncate font-mono text-[11px] text-muted" dir="rtl">
+                                {location}
+                            </span>
+                        )}
+                    </span>
                 </header>
                 <p className="selectable m-0 leading-normal whitespace-pre-wrap text-body">
                     {finding.body}
@@ -65,7 +66,7 @@ export function FindingCard({
                     <Button
                         onClick={() =>
                             void navigator.clipboard.writeText(
-                                `${location} — ${finding.title}\n\n${finding.body}${finding.suggestion ? `\n\n${finding.suggestion}` : ''}`,
+                                `${location}: ${finding.title}\n\n${finding.body}${finding.suggestion ? `\n\n${finding.suggestion}` : ''}`,
                             )
                         }
                         size="sm"
