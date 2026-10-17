@@ -8,11 +8,13 @@ import type {
     DiffSource,
     FileDiff,
     HistoryMeta,
+    NotifyPrefs,
     Op,
     Outcome,
     Provider,
     ProviderStatus,
     ReviewState,
+    ScopeSummary,
     Snapshot,
     Stash,
     TestResult,
@@ -47,12 +49,14 @@ export const api = {
         invoke<Commit[]>('log', { limit, reference, root, skip }),
     mergeBase: (root: string, first: string, second: string) =>
         invoke<null | string>('merge_base', { a: first, b: second, root }),
+    notifyPrefs: () => invoke<NotifyPrefs>('notify_prefs'),
     openFolderDialog: () => invoke<void>('open_folder_dialog'),
     openRepository: (path: string) => invoke<void>('open_repository', { path }),
     openSettingsWindow: (pane: null | string) => invoke<void>('open_settings_window', { pane }),
     openVisualPlan: (root: string, id: string) => invoke<void>('open_visual_plan', { id, root }),
     openWelcome: () => invoke<void>('open_welcome'),
     perform: (root: string, op: Op) => invoke<Outcome>('perform', { op, root }),
+    playSound: (sound: string) => invoke<void>('play_sound', { sound }),
     printWindow: () => invoke<void>('print_window'),
     rangeDetail: (root: string, oldest: string, newest: string) =>
         invoke<Detail>('range_detail', { newest, oldest, root }),
@@ -65,7 +69,9 @@ export const api = {
     setAiKey: (provider: Provider, key: string) => invoke<void>('set_ai_key', { key, provider }),
     setCliInstalled: (installed: boolean) => invoke<CliStatus>('set_cli_installed', { installed }),
     setGitPath: (path: null | string) => invoke<void>('set_git_path', { path }),
+    setNotifyPrefs: (notify: NotifyPrefs) => invoke<void>('set_notify_prefs', { notify }),
     snapshot: (root: string) => invoke<Snapshot>('snapshot', { root }),
+    sounds: () => invoke<string[]>('sounds'),
     startReview: (root: string, provider: null | Provider) =>
         invoke<void>('start_review', { provider, root }),
     startVisual: (
@@ -80,6 +86,7 @@ export const api = {
     topLevel: (path: string) => invoke<null | string>('top_level', { path }),
     undo: (root: string) => invoke<null | Outcome>('undo', { root }),
     visualPlans: (root: string) => invoke<VisualPlanSummary[]>('visual_plans', { root }),
+    visualScope: (root: string) => invoke<ScopeSummary>('visual_scope', { root }),
     visualState: (root: string, kind: VisualKind) =>
         invoke<VisualState>('visual_state', { kind, root }),
     watch: (root: string) => invoke<void>('watch', { root }),

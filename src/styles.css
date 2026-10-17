@@ -261,6 +261,19 @@
     font-weight: 600;
 }
 
+/* The bar under the Visual header while a recap or plan is being drawn. */
+@keyframes vz-run {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(400%);
+    }
+}
+.vz-run-bar {
+    animation: vz-run 1.8s ease-in-out infinite;
+}
+
 /* The print copy of a visual is the only thing on paper; on screen it is never shown. */
 .vz-print {
     display: none;

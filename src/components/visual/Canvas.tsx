@@ -19,7 +19,7 @@ const MAX_ZOOM = 2;
 const STATE_LABELS = { after: 'After', before: 'Before', proposed: 'Proposed' };
 
 /** The wireframe board: screens left to right, connectors between them, pins and notes. */
-export function Canvas({ canvas }: { canvas: VisualCanvas }) {
+export function Canvas({ canvas, framed = true }: { canvas: VisualCanvas; framed?: boolean }) {
     const { mode } = useVisual();
     const layout = useMemo(() => layoutCanvas(canvas), [canvas]);
 
@@ -28,7 +28,7 @@ export function Canvas({ canvas }: { canvas: VisualCanvas }) {
     }
 
     if (mode === 'app') {
-        return <Board canvas={canvas} layout={layout} />;
+        return <Board canvas={canvas} framed={framed} layout={layout} />;
     }
 
     const scale = Math.min(1, PRINT_WIDTH / layout.width);
@@ -120,10 +120,19 @@ export function StateChip({ state }: { state: NonNullable<VisualScreen['state']>
     );
 }
 
-function Board({ canvas, layout }: { canvas: VisualCanvas; layout: CanvasLayout }) {
+function Board({
+    canvas,
+    framed,
+    layout,
+}: {
+    canvas: VisualCanvas;
+    framed: boolean;
+    layout: CanvasLayout;
+}) {
     const viewport = useRef<HTMLDivElement>(null);
     const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
     const drag = useRef<{ x: number; y: number } | null>(null);
+    const moved = useRef(false);
 
     const fit = () => {
         const element = viewport.current;
@@ -131,6 +140,8 @@ function Board({ canvas, layout }: { canvas: VisualCanvas; layout: CanvasLayout 
         if (!element) {
             return;
         }
+
+        moved.current = false;
 
         const zoom = Math.max(
             MIN_ZOOM,
@@ -146,6 +157,21 @@ function Board({ canvas, layout }: { canvas: VisualCanvas; layout: CanvasLayout 
 
     useLayoutEffect(fit, [layout]);
 
+    // Until the reader moves the board, it stays fitted as the window and panels change size.
+    useEffect(() => {
+        const element = viewport.current;
+
+        if (!element) {
+            return;
+        }
+
+        const observer = new ResizeObserver(() => !moved.current && fit());
+
+        observer.observe(element);
+
+        return () => observer.disconnect();
+    });
+
     useEffect(() => {
         const element = viewport.current;
 
@@ -156,6 +182,7 @@ function Board({ canvas, layout }: { canvas: VisualCanvas; layout: CanvasLayout 
         // A non-passive listener, so a pinch or scroll moves the board instead of the page.
         const onWheel = (event: WheelEvent) => {
             event.preventDefault();
+            moved.current = true;
 
             const bounds = element.getBoundingClientRect();
             const pointX = event.clientX - bounds.left;
@@ -192,6 +219,7 @@ function Board({ canvas, layout }: { canvas: VisualCanvas; layout: CanvasLayout 
             return;
         }
 
+        moved.current = true;
         setView((current) => {
             const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, current.zoom * factor));
             const centerX = element.clientWidth / 2;
@@ -209,7 +237,7 @@ function Board({ canvas, layout }: { canvas: VisualCanvas; layout: CanvasLayout 
     return (
         <div
             aria-label="Wireframes"
-            className="relative h-[clamp(320px,52vh,640px)] cursor-grab overflow-hidden border-b border-line bg-canvas bg-[radial-gradient(var(--line)_1px,transparent_1px)] bg-size-[18px_18px] active:cursor-grabbing"
+            className={`relative cursor-grab overflow-hidden bg-canvas bg-[radial-gradient(var(--line)_1px,transparent_1px)] bg-size-[18px_18px] active:cursor-grabbing ${framed ? 'h-[clamp(300px,46vh,560px)] rounded-xl border border-line' : 'h-[clamp(320px,52vh,640px)] border-y border-line'}`}
             onPointerDown={(event) => {
                 if ((event.target as HTMLElement).closest('button')) {
                     return;
@@ -226,6 +254,7 @@ function Board({ canvas, layout }: { canvas: VisualCanvas; layout: CanvasLayout 
                 }
 
                 drag.current = { x: event.clientX, y: event.clientY };
+                moved.current = true;
                 setView((current) => ({
                     ...current,
                     x: current.x + event.clientX - start.x,
@@ -255,14 +284,9 @@ function Board({ canvas, layout }: { canvas: VisualCanvas; layout: CanvasLayout 
                 >
                     −
                 </button>
-                <button
-                    className="h-6 w-12 rounded-md font-mono hover:bg-hover"
-                    onClick={fit}
-                    title="Fit to window"
-                    type="button"
-                >
+                <span className="w-11 text-center font-mono" title="Zoom">
                     {Math.round(view.zoom * 100)}%
-                </button>
+                </span>
                 <button
                     aria-label="Zoom in"
                     className="h-6 w-6 rounded-md hover:bg-hover"
@@ -270,6 +294,14 @@ function Board({ canvas, layout }: { canvas: VisualCanvas; layout: CanvasLayout 
                     type="button"
                 >
                     +
+                </button>
+                <button
+                    className="h-6 rounded-md px-2 text-muted hover:bg-hover hover:text-fg"
+                    onClick={fit}
+                    title="Fit every screen in view"
+                    type="button"
+                >
+                    Fit
                 </button>
             </div>
         </div>

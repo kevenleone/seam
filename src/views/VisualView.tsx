@@ -6,13 +6,14 @@ import type { Visual, VisualKind, VisualState } from '../lib/types';
 import { Icon } from '../components/Icon';
 import { ProviderSelect } from '../components/ProviderSelect';
 import { Button, relativeTime, TextArea } from '../components/ui';
+import { RecapEmpty, RunBar, RunStatus, WhileDrawing } from '../components/visual/States';
 import { VisualDocument } from '../components/visual/VisualDocument';
 import { PROVIDER_LABELS } from '../lib/ai';
 import { api, errorMessage } from '../lib/api';
+import { updateSettings, useSettings } from '../lib/settings';
 import { useSettingsModal } from '../lib/settingsModal';
-import { branchLabel, useRepo } from '../lib/store';
+import { useRepo } from '../lib/store';
 import { type ExportFormat, exportName, exportVisual, EXTENSIONS } from '../lib/visualExport';
-import { Running } from './ReviewView';
 
 const KINDS: { id: VisualKind; label: string }[] = [
     { id: 'recap', label: 'Recap' },
@@ -63,15 +64,10 @@ export function VisualView() {
                 shown={shown}
                 state={state}
             />
+            {state.status === 'running' && <RunBar />}
             <div className="min-h-0 flex-1 overflow-auto">
                 {state.status === 'running' ? (
-                    <Running
-                        detail={state.kind === 'plan' ? 'exploring the repository' : state.scope}
-                        expected="most take two to five minutes"
-                        onCancel={() => useRepo.getState().cancelVisual(state.kind)}
-                        startedAt={state.startedAt}
-                        title={`${PROVIDER_LABELS[state.provider]} is drawing ${state.kind === 'plan' ? 'a plan' : `a recap of ${state.scope}`}`}
-                    />
+                    <WhileDrawing state={state} />
                 ) : (
                     <>
                         {state.status === 'failed' && <Failure kind={kind} state={state} />}
@@ -82,7 +78,7 @@ export function VisualView() {
                             />
                         )}
                         {shown && !composer && <VisualDocument mode="app" visual={shown} />}
-                        {!shown && kind === 'recap' && <RecapIntro />}
+                        {!shown && kind === 'recap' && <RecapEmpty />}
                     </>
                 )}
             </div>
@@ -247,28 +243,6 @@ function PlanComposer({ initial, onCancel }: { initial: string; onCancel?: () =>
     );
 }
 
-function RecapIntro() {
-    const { startVisual, status } = useRepo();
-
-    return (
-        <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
-            <Icon className="text-accent" name="sparkle" size={30} />
-            <h2 className="m-0 text-[16px] font-semibold">
-                See what {branchLabel(status)} changes
-            </h2>
-            <p className="m-0 max-w-md leading-normal text-muted">
-                The model reads the branch against its base and draws a map of it: the screens it
-                touches before and after, how the pieces fit, the decisions behind it, the diffs
-                worth reading and how to test it. Export it as a web page, PDF, Markdown or
-                Excalidraw.
-            </p>
-            <Button onClick={() => startVisual('recap')} variant="primary">
-                Recap {branchLabel(status)}
-            </Button>
-        </div>
-    );
-}
-
 function shownVisual(state: VisualState): null | Visual {
     if (state.status === 'done') {
         return state.visual;
@@ -316,11 +290,15 @@ function VisualHeader({
                     </button>
                 ))}
             </nav>
-            {shown && (
-                <span className="truncate text-[12px] text-muted">
-                    {kind === 'recap' ? shown.scope : 'Planned'} · {relativeTime(shown.createdAt)}{' '}
-                    by {PROVIDER_LABELS[shown.provider]}
-                </span>
+            {state.status === 'running' ? (
+                <RunStatus state={state} />
+            ) : (
+                shown && (
+                    <span className="truncate text-[12px] text-muted">
+                        {kind === 'recap' ? shown.scope : 'Planned'} ·{' '}
+                        {relativeTime(shown.createdAt)} by {PROVIDER_LABELS[shown.provider]}
+                    </span>
+                )
             )}
             {stale && (
                 <span className="rounded-full bg-warn-bg px-2 py-0.5 text-[11.5px] text-warn">
@@ -358,25 +336,45 @@ function VisualHeader({
             >
                 <Icon name="gear" size={13} />
             </Button>
-            {shown && <ExportMenu onPrint={onPrint} visual={shown} />}
-            {kind === 'recap' ? (
-                <Button
-                    disabled={running}
-                    onClick={() => startVisual('recap')}
-                    size="sm"
-                    title="Recap the branch (⇧⌘V)"
-                    variant={shown ? 'default' : 'primary'}
-                >
-                    <Icon name="refresh" size={12} />
-                    {shown ? 'Redraw recap' : `Recap ${branchLabel(status)}`}
-                </Button>
-            ) : (
-                shown && (
-                    <Button disabled={running} onClick={onCompose} size="sm">
-                        <Icon name="plus" size={12} /> New plan
-                    </Button>
-                )
-            )}
+            {shown && !running && <WidthToggle />}
+            {shown && !running && <ExportMenu onPrint={onPrint} visual={shown} />}
+            {running
+                ? null
+                : kind === 'recap'
+                  ? shown && (
+                        <Button
+                            onClick={() => startVisual('recap')}
+                            size="sm"
+                            title="Recap the branch again (⇧⌘V)"
+                        >
+                            <Icon name="refresh" size={12} />
+                            Redraw recap
+                        </Button>
+                    )
+                  : shown && (
+                        <Button onClick={onCompose} size="sm">
+                            <Icon name="plus" size={12} /> New plan
+                        </Button>
+                    )}
         </div>
+    );
+}
+
+function WidthToggle() {
+    const { visualWide } = useSettings();
+    const label = visualWide ? 'Centre in one column' : 'Spread across the window';
+
+    return (
+        <Button
+            aria-label={label}
+            aria-pressed={visualWide}
+            onClick={() => updateSettings({ visualWide: !visualWide })}
+            size="sm"
+            title={label}
+            variant="ghost"
+        >
+            <Icon name={visualWide ? 'collapse' : 'expand'} size={13} />
+            {visualWide ? 'Centred' : 'Wide'}
+        </Button>
     );
 }

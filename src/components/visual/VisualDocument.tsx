@@ -45,7 +45,10 @@ export function VisualDocument({
     mode: RenderMode;
     visual: VisualDoc;
 }) {
-    const { syntaxHighlight } = useSettings();
+    const { syntaxHighlight, visualWide } = useSettings();
+    // Wide is the app's alone: a print or an exported page always reads as one centred column.
+    const spread = mode === 'app' && visualWide;
+    const column = spread ? 'max-w-[1360px]' : 'max-w-[880px]';
     const loaded = useHighlighter(syntaxHighlight && !highlighter);
     const label = visual.kind === 'plan' ? 'Visual plan' : 'Visual recap';
     const meta = [
@@ -65,7 +68,7 @@ export function VisualDocument({
                 className="vz-document flex flex-col"
                 onClick={mode === 'app' ? openLink : undefined}
             >
-                <header className="mx-auto flex w-full max-w-[880px] flex-col gap-2.5 px-8 pt-8 pb-6">
+                <header className={`mx-auto flex w-full ${column} flex-col gap-2.5 px-8 pt-8 pb-6`}>
                     <span className="text-[11px] font-semibold tracking-[0.12em] text-muted uppercase">
                         {label}
                     </span>
@@ -91,11 +94,11 @@ export function VisualDocument({
                     )}
                 </header>
                 {visual.canvas.screens.length > 0 && (
-                    <div className={mode === 'app' ? '' : 'mx-auto w-full max-w-[880px] px-8'}>
-                        <Canvas canvas={visual.canvas} />
+                    <div className={spread ? '' : `mx-auto w-full ${column} px-8`}>
+                        <Canvas canvas={visual.canvas} framed={!spread} />
                     </div>
                 )}
-                <div className="mx-auto flex w-full max-w-[880px] flex-col gap-4 px-8 pt-6 pb-16">
+                <div className={`mx-auto flex w-full ${column} flex-col gap-4 px-8 pt-6 pb-16`}>
                     {sections(visual.blocks).map((section, index) => {
                         if (section.kind === 'diffs') {
                             previous = 'diff';
@@ -141,7 +144,7 @@ function BlockView({ block, visual }: { block: VisualBlock; visual: VisualDoc })
         case 'diff':
             return <KeyChanges blocks={[block]} diffs={visual.diffs} />;
         case 'fileTree':
-            return <FileTreeCard block={block} />;
+            return <FileTreeCard block={block} diffs={visual.diffs} />;
         case 'questions':
             return <QuestionsCard block={block} />;
         case 'text':
