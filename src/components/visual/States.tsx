@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
 
-import type { FileDiff, ScopeSummary, VisualState } from '../../lib/types';
+import type { Detail, FileDiff, ScopeSummary, VisualState } from '../../lib/types';
 
 import { PROVIDER_LABELS } from '../../lib/ai';
 import { api, errorMessage } from '../../lib/api';
+import { useSettings } from '../../lib/settings';
 import { branchLabel, useRepo } from '../../lib/store';
 import { installSketchStyle } from '../../lib/visual';
+import { DiffView } from '../DiffView';
 import { Icon } from '../Icon';
-import { Button } from '../ui';
+import { Button, Modal, relativeTime } from '../ui';
 import { DiffPanel } from './DiffPanel';
 
 installSketchStyle();
@@ -118,6 +120,7 @@ export function RunStatus({ state }: { state: RunningState }) {
 /** While the agent draws: the change it is reading, file by file, each diff a click away. */
 export function WhileDrawing({ state }: { state: RunningState }) {
     const [open, setOpen] = useState<null | string>(null);
+    const [commit, setCommit] = useState<null | string>(null);
     const additions = state.diffs.reduce((sum, diff) => sum + diff.additions, 0);
     const deletions = state.diffs.reduce((sum, diff) => sum + diff.deletions, 0);
     const largest = Math.max(1, ...state.diffs.map((diff) => diff.additions + diff.deletions));
@@ -228,17 +231,79 @@ export function WhileDrawing({ state }: { state: RunningState }) {
                         const [sha, ...subject] = commit.split(' ');
 
                         return (
-                            <div className="flex gap-2.5 leading-snug" key={commit}>
+                            <button
+                                className="-mx-2 flex gap-2.5 rounded-md px-2 py-1 text-left leading-snug hover:bg-hover"
+                                key={commit}
+                                onClick={() => setCommit(sha)}
+                                title="See what this commit changes"
+                                type="button"
+                            >
                                 <span className="shrink-0 font-mono text-[11.5px] text-dim">
                                     {sha}
                                 </span>
-                                <span className="selectable text-body">{subject.join(' ')}</span>
-                            </div>
+                                <span className="text-body">{subject.join(' ')}</span>
+                            </button>
                         );
                     })}
                 </aside>
             )}
+            {commit && <CommitModal onClose={() => setCommit(null)} sha={commit} />}
         </div>
+    );
+}
+
+/** One commit of the branch: its message and everything it changed. */
+function CommitModal({ onClose, sha }: { onClose(): void; sha: string }) {
+    const { root } = useRepo();
+    const { ignoreWhitespace } = useSettings();
+    const [detail, setDetail] = useState<Detail | null>(null);
+    const [failure, setFailure] = useState<null | string>(null);
+
+    useEffect(() => {
+        api.commitDetail(root, sha, ignoreWhitespace).then(setDetail, (error) =>
+            setFailure(errorMessage(error)),
+        );
+    }, [ignoreWhitespace, root, sha]);
+
+    const info = detail?.commit;
+    const additions = detail?.files.reduce((sum, file) => sum + (file.additions ?? 0), 0) ?? 0;
+    const deletions = detail?.files.reduce((sum, file) => sum + (file.deletions ?? 0), 0) ?? 0;
+
+    return (
+        <Modal onClose={onClose} title={info?.subject ?? sha} width={1100}>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-muted">
+                <span className="font-mono">{info?.sha.slice(0, 10) ?? sha}</span>
+                {info && (
+                    <span>
+                        {info.authorName} · {relativeTime(info.date)}
+                    </span>
+                )}
+                {detail && (
+                    <span className="font-mono">
+                        {detail.files.length} file{detail.files.length === 1 ? '' : 's'} ·{' '}
+                        <span className="text-add">+{additions}</span>{' '}
+                        <span className="text-del">−{deletions}</span>
+                    </span>
+                )}
+            </div>
+            {info?.body && (
+                <p className="selectable m-0 max-h-28 overflow-auto leading-normal whitespace-pre-wrap text-body">
+                    {info.body}
+                </p>
+            )}
+            <div className="flex h-[60vh] flex-col overflow-hidden rounded-lg border border-line bg-app">
+                {failure ? (
+                    <span className="m-auto text-del">{failure}</span>
+                ) : detail ? (
+                    <DiffView diffs={detail.diffs} />
+                ) : (
+                    <span className="m-auto text-muted">Loading…</span>
+                )}
+            </div>
+            <div className="flex justify-end">
+                <Button onClick={onClose}>Close</Button>
+            </div>
+        </Modal>
     );
 }
 
