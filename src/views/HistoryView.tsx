@@ -293,7 +293,7 @@ function CommitList() {
                                 {!isPushed(meta, commit.sha) && (
                                     <span
                                         className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent"
-                                        title="Only on this Mac — not pushed yet"
+                                        title="Only on this Mac, not pushed yet"
                                     />
                                 )}
                                 <span className="font-mono text-[11.5px] text-muted">

@@ -701,7 +701,7 @@ export function AboutPane() {
     const rows: [string, string][] = [
         ['Version', version],
         ['Git', git],
-        ['Account', 'None — Seam never asks for one'],
+        ['Account', 'None. Seam never asks for one'],
         ['Telemetry', 'None'],
         ['AI', 'Only when you start a review, through the agent or provider you chose'],
         ['Built with', 'Tauri 2 · Rust · React 19 · TypeScript'],

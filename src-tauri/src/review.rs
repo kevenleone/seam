@@ -232,7 +232,7 @@ Look for:
 {level} Skip anything a formatter or linter would catch.
 
 Severity:
-- "risk": likely to cause a bug, data loss or a security problem — should block a merge.
+- "risk": likely to cause a bug, data loss or a security problem; should block a merge.
 - "check": worth verifying before merging.
 - "note": useful context for the reviewer, e.g. a behaviour change.
 
@@ -263,7 +263,7 @@ Diff{trunc}:
         label = scope.label,
         focus = focus.join("\n- "),
         trunc = if truncated {
-            " (truncated — large change)"
+            " (truncated: large change)"
         } else {
             ""
         },

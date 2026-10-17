@@ -6,8 +6,8 @@ import { accentById, applyTokens } from '../../lib/themes';
 const ROW = 'h-[3px] rounded-full bg-dim opacity-60';
 
 /**
- * A miniature Seam window painted with the theme's own tokens — sidebar, a hunk with an
- * addition and a deletion — so the card shows what the theme does to a diff.
+ * A miniature Seam window painted with the theme's own tokens (sidebar, a hunk with an
+ * addition and a deletion), so the card shows what the theme does to a diff.
  */
 export function ThemePreview({ theme }: { theme: ThemeDefinition }) {
     const { accent } = useSettings();

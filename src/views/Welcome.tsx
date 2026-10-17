@@ -97,7 +97,7 @@ export function Welcome() {
                         ],
                         [
                             'Everyday git, undoable',
-                            'Stash, rename or remove commits, reset, revert — and undo any of it with ⌘Z.',
+                            'Stash, rename or remove commits, reset or revert, and undo any of it with ⌘Z.',
                         ],
                     ].map(([title, text]) => (
                         <li className="flex flex-col gap-0.5" key={title}>

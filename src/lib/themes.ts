@@ -1,6 +1,6 @@
 // The theme registry. A theme is a whole token map: `paintTheme` writes it onto the root
 // element, so every `bg-panel` / `text-muted` utility follows without a `dark:` variant.
-// Most themes are seeds — the dozen colours a palette publishes — expanded by `buildTokens`.
+// Most themes are seeds (the dozen colours a palette publishes) expanded by `buildTokens`.
 
 export type Mode = 'dark' | 'light';
 
@@ -17,7 +17,7 @@ interface ThemeSeed {
     app: string;
     canvas: string;
     control: string;
-    /** Deletions: an orange from the palette — never red against green. */
+    /** Deletions: an orange from the palette, never red against green. */
     del: string;
     dim: string;
     fg: string;

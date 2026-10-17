@@ -245,7 +245,7 @@ fn pick_and_open(app: &AppHandle) {
         });
 }
 
-// MARK: Commands — windows
+// MARK: Commands: windows
 
 #[tauri::command]
 async fn open_repository(app: AppHandle, path: String) -> CmdResult<()> {
@@ -302,7 +302,7 @@ async fn git_version() -> CmdResult<String> {
     Ok(out.text().trim().to_string())
 }
 
-// MARK: Commands — reading
+// MARK: Commands: reading
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -425,7 +425,7 @@ async fn range_detail(root: String, oldest: String, newest: String) -> CmdResult
     })
 }
 
-// MARK: Commands — actions and undo
+// MARK: Commands: actions and undo
 
 fn progress_for(app: &AppHandle, window: &Window) -> impl Fn(String) + Send + Sync + 'static {
     let (app, label) = (app.clone(), window.label().to_string());
@@ -549,7 +549,7 @@ fn undo_titles(state: State<'_, AppState>, root: String) -> UndoState {
     undo_state(&state, Path::new(&root))
 }
 
-// MARK: Commands — review
+// MARK: Commands: review
 
 fn emit_review(app: &AppHandle, root: &Path) {
     let _ = app.emit("review-updated", root.to_string_lossy());
@@ -654,7 +654,7 @@ async fn start_review_task(app: &AppHandle, root: PathBuf, config: AiConfig) -> 
     Ok(())
 }
 
-// MARK: Commands — AI
+// MARK: Commands: AI
 
 #[tauri::command]
 async fn ai_providers() -> Vec<ProviderStatus> {
@@ -729,7 +729,7 @@ async fn cancel_review(app: AppHandle, root: String) {
     emit_review(&app, &root);
 }
 
-// MARK: Commands — recent repositories
+// MARK: Commands: recent repositories
 
 #[tauri::command]
 fn recent_repositories(prefs: State<'_, PrefsStore>) -> Vec<String> {

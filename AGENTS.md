@@ -4,7 +4,7 @@ This file is the single source of truth for agent instructions in this repositor
 
 ## What This Is
 
-Seam is a desktop git client — Tauri 2 over the user's own `git` — for everyday
+Seam is a desktop git client, Tauri 2 over the user's own `git`, for everyday
 work on a repository: stage single lines, commit, stash, rename or remove
 commits, and undo any of it with ⌘Z. It is the first pass of a larger design
 (AI review, agent sessions, pull requests, a three-way conflict view and a
@@ -57,19 +57,19 @@ it off until that is fixed upstream.
 
 Two processes, two kinds of window.
 
-**Host and engine** (`src-tauri/`) — Rust. `src/git/` is the whole git engine and
+**Host and engine** (`src-tauri/`): Rust. `src/git/` is the whole git engine and
 has no Tauri dependency, so it is tested directly:
 
-- `process.rs` — runs git with the login shell's environment (captured once, so
+- `process.rs`: runs git with the login shell's environment (captured once, so
   hooks find node and friends when the app is launched from Finder).
-- `parse.rs` — porcelain v2 status, unified diffs, log, refs, stashes, numstat.
-- `patch.rs` — patches holding only some of a diff's lines, for staging,
+- `parse.rs`: porcelain v2 status, unified diffs, log, refs, stashes, numstat.
+- `patch.rs`: patches holding only some of a diff's lines, for staging,
   unstaging and discarding single lines.
-- `rewrite.rs` — rename, remove and squash any commit with a scripted `rebase -i`.
-- `repo.rs` — every operation, each returning an `Undoable`.
-- `ops.rs` — the `Op` enum the renderer sends and the per-repository undo/redo stacks.
+- `rewrite.rs`: rename, remove and squash any commit with a scripted `rebase -i`.
+- `repo.rs`: every operation, each returning an `Undoable`.
+- `ops.rs`: the `Op` enum the renderer sends and the per-repository undo/redo stacks.
 
-`src/ai.rs` is every model Seam can talk to, natively — no sidecar, no SDK:
+`src/ai.rs` is every model Seam can talk to, natively, with no sidecar and no SDK:
 the coding agents' own CLIs, headless and read-only in the repository
 (`claude -p`, `codex exec --sandbox read-only`, `opencode run`), and the HTTP
 APIs of Anthropic, OpenAI, Google Gemini and any OpenAI-compatible endpoint
@@ -86,7 +86,7 @@ end to end; any provider id works there.
 
 `src/tray.rs` is the menu bar icon (recent projects, review the last-focused
 repository) and `src/prefs.rs` what the host remembers in the app data folder
-(the AI configuration and recent repositories) — the host owns both because the
+(the AI configuration and recent repositories). The host owns both because the
 tray needs them with no window open. Closing the last window keeps Seam running;
 only Quit (⌘Q or the tray) exits.
 
@@ -95,14 +95,14 @@ repository (labelled by a hash of its path), the menu, the file watcher, and
 folders opened from Finder or the Dock. Actions on one repository are serialised
 by a per-repository lock, undo and redo included.
 
-**Renderer** (`src/`) — React 19, Zustand, Tailwind v4, Vite. One `index.html`;
+**Renderer** (`src/`): React 19, Zustand, Tailwind v4, Vite. One `index.html`;
 each window loads it with `?view=welcome` or `?repo=<path>` (`src/main.tsx`).
 
 - **`src/lib/api.ts`** and **`src/lib/types.ts`** mirror the Rust commands and
   models one to one. Change both sides together.
-- **`src/lib/store.ts`** — a window's state. `perform(op)` is the only way an
+- **`src/lib/store.ts`**: a window's state. `perform(op)` is the only way an
   action reaches git; it queues behind the previous action, then refreshes.
-- **`src/components/DiffView.tsx`** — the virtualised diff shared by Changes
+- **`src/components/DiffView.tsx`**: the virtualised diff shared by Changes
   and History. Large diffs must stay virtualised.
 
 Windows are created hidden and show themselves after the first paint
@@ -122,7 +122,7 @@ in the `@theme inline` block of `src/styles.css`.
   the root and caches the map; `public/theme.js` repaints that cache before the
   bundle loads, so the first frame is already right. A new token is added to
   `SEAM_DARK`, `SEAM_LIGHT` and `buildTokens`, and bridged in `@theme inline`.
-- Colours come from tokens (`bg-panel`, `text-muted`) — never a hex in a
+- Colours come from tokens (`bg-panel`, `text-muted`), never a hex in a
   component, and there is no `dark:` variant.
 - An inline `style` is right only for values a class cannot carry (a computed
   length, a virtualised row offset, a swatch previewing a colour).
@@ -132,8 +132,8 @@ in the `@theme inline` block of `src/styles.css`.
 `src/components/settings/` is the settings sheet (⌘,), after Lore's: a rail of
 panes with search, title/description rows with a trailing control. Interface
 preferences live in `localStorage` (`src/lib/settings.ts`, shared by every
-window); what the host needs with no window open — the AI configuration and
-recent repositories — lives in `src-tauri/src/prefs.rs`. A repository window
+window); what the host needs with no window open (the AI configuration and
+recent repositories) lives in `src-tauri/src/prefs.rs`. A repository window
 shows settings as a sheet; elsewhere they open in their own window.
 
 ## Code Style
@@ -142,7 +142,7 @@ shows settings as a sheet; elsewhere they open in their own window.
 - Early returns over nested conditionals; optional chaining (`?.`) and nullish coalescing (`??`)
 - Explicit return types on exported functions
 - Functional components only; no class components
-- No `any` — TypeScript strict mode enforced everywhere
+- No `any`: TypeScript strict mode enforced everywhere
 - No single-letter parameters (ESLint enforces it) and no abbreviations in new identifiers
 - Rust: `cargo fmt` defaults; clippy clean with `-D warnings`
 
@@ -169,7 +169,7 @@ shows settings as a sheet; elsewhere they open in their own window.
 
 **The default is no comment.** Most code needs none, and most comments that get
 written are restating what the code already says. A comment earns its place only
-when the code alone would let someone break something important — otherwise
+when the code alone would let someone break something important; otherwise
 leave it out and let the code speak.
 
 Write one when, and only when:
@@ -205,7 +205,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/): `<prefix>: <de
 
 - Run `pnpm format` before committing; if Prettier modifies files, stage them and add a final `chore: Source Format` commit as the last commit in the sequence.
 - Do **not** add `Co-authored-by:` trailers.
-- Do **not** add AI attribution footers anywhere — no "🤖 Generated with Claude Code" (or similar) in commit messages, PR descriptions, or issue comments.
+- Do **not** add AI attribution footers anywhere: no "🤖 Generated with Claude Code" (or similar) in commit messages, PR descriptions, or issue comments.
 - Avoid commit bodies/footers unless the change has a breaking or high-impact side effect.
 - Split commits by logical area; keep each commit focused on one concern.
 
@@ -225,7 +225,7 @@ Use [Conventional Commits](https://www.conventionalcommits.org/): `<prefix>: <de
 ### Commit Splitting
 
 - Split changes into one or more commits by area, context, or logical grouping
-- Do not add hard rules by commit type — use your judgment
+- Do not add hard rules by commit type; use your judgment
 - Keep each commit focused on a single concern
 
 ### Co-Author Trailer

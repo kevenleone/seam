@@ -167,7 +167,7 @@ pub async fn perform(
         ),
         Op::Uncommit => (
             u(repo.uncommit().await?),
-            "Undid commit — changes are staged".into(),
+            "Undid commit. The changes are staged".into(),
         ),
         Op::Reword { sha, message } => {
             (u(repo.reword(sha, message).await?), "Renamed commit".into())
@@ -275,7 +275,7 @@ pub async fn perform(
         Op::Pull { mode } => (u(repo.pull(*mode, progress).await?), "Pulled".into()),
         Op::Push { force } => {
             repo.push(*force, progress).await?;
-            (None, "Pushed — this can't be undone from Seam".into())
+            (None, "Pushed. A push can't be undone from Seam".into())
         }
     })
 }

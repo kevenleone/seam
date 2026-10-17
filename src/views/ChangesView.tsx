@@ -207,7 +207,7 @@ function ConflictPanel({ change }: { change: FileChange }) {
             <Icon className="text-warn" name="merge" size={34} />
             <h3 className="m-0 text-[16px] font-semibold">{change.path} has conflicts</h3>
             <p className="m-0 max-w-md text-muted">
-                Edit the file to resolve the conflict markers, then mark it resolved — or take one
+                Edit the file to resolve the conflict markers, then mark it resolved, or take one
                 side as a whole.
             </p>
             <div className="flex flex-wrap justify-center gap-2">

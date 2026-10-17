@@ -334,7 +334,7 @@ fn strip_prefix(path: &str) -> String {
 }
 
 fn paths_from_diff_git(line: &str) -> (Option<String>, Option<String>) {
-    // diff --git a/path b/path — ambiguous with spaces; refined later by ---/+++ or rename lines.
+    // diff --git a/path b/path is ambiguous with spaces; refined later by ---/+++ or rename lines.
     let rest = &line["diff --git ".len()..];
     if let (Some(stripped), Some(i)) = (rest.strip_prefix("a/"), rest.rfind(" b/")) {
         let old = stripped[..i - 2].to_string();
