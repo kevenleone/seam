@@ -42,6 +42,29 @@ pub struct Visual {
     pub duration_ms: u64,
 }
 
+/// What a recap would cover, before one is drawn.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ScopeSummary {
+    pub label: String,
+    pub commits: usize,
+    pub files: usize,
+    pub additions: u32,
+    pub deletions: u32,
+}
+
+impl ScopeSummary {
+    pub fn of(scope: &Scope) -> Self {
+        ScopeSummary {
+            label: scope.label.clone(),
+            commits: scope.commits.len(),
+            files: scope.diffs.len(),
+            additions: scope.diffs.iter().map(|diff| diff.additions).sum(),
+            deletions: scope.diffs.iter().map(|diff| diff.deletions).sum(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PlanSummary {
@@ -59,12 +82,15 @@ pub struct PlanSummary {
 )]
 pub enum VisualState {
     Idle,
+    /// Carries the change being read, so it can be shown while the agent works.
     Running {
         kind: VisualKind,
         provider: Provider,
         scope: String,
         prompt: Option<String>,
         started_at: i64,
+        commits: Vec<String>,
+        diffs: Vec<FileDiff>,
     },
     Done {
         visual: Visual,
