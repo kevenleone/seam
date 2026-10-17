@@ -1,0 +1,56 @@
+# Seam
+
+A desktop git client — Tauri 2 + React + TypeScript + Tailwind — for everyday git: stage single
+lines, commit, stash, rename or remove commits, and undo any of it with ⌘Z.
+
+This is the first pass of the Seam design canvas: the git core. AI review, agent sessions, pull
+requests, the three-way conflict view, onboarding and the `seam` CLI come next.
+
+## Develop
+
+Needs Node 22, pnpm (the version is pinned in `package.json`), Rust stable and git.
+
+```sh
+pnpm install
+pnpm app:dev                 # Vite + the Tauri window, with hot reload
+pnpm build && pnpm test      # parser + integration tests on throwaway repositories
+pnpm lint && pnpm format     # ESLint and Prettier; CI checks both
+pnpm app:build               # → src-tauri/target/release/bundle/macos/Seam.app and a .dmg
+```
+
+`cargo test` needs `dist/` to exist, so build the frontend first. CI
+(`.github/workflows/ci.yml`) runs Prettier, ESLint, the frontend build,
+`cargo fmt --check`, `cargo clippy -D warnings` and `cargo test`. Releases are
+cut by release-please from Conventional Commits and built as a universal macOS
+`.dmg`.
+
+Working on the code — architecture, conventions and commit rules — is described
+in [AGENTS.md](AGENTS.md).
+
+## Layout
+
+- `src-tauri/src/git/` — everything git, in Rust, by shelling out to your own `git` (so config,
+  hooks, credential helpers and SSH behave as in Terminal; the login shell's environment is loaded
+  once so hooks find node etc.).
+    - `parse.rs` — porcelain v2 status, unified diffs, log, refs, stashes, numstat.
+    - `patch.rs` — partial patches for staging, unstaging or discarding single lines.
+    - `rewrite.rs` — rename / remove / squash any commit through a scripted `rebase -i`.
+    - `repo.rs` — every operation, each returning an `Undoable`.
+    - `ops.rs` — the `Op` enum the UI sends, and per-repository undo/redo stacks.
+- `src-tauri/src/lib.rs` — Tauri commands, windows (welcome + one per repository), menu,
+  file watching, opening folders from Finder/Dock.
+- `src/` — the React UI. `lib/store.ts` holds a window's state; `views/` has Welcome, Changes and
+  History; `components/` has the virtualized diff, command palette (⌘K) and dialogs.
+
+## How undo works
+
+Before an action, Seam records what it needs to reverse it: the index as a tree
+(`git write-tree`), file contents as blobs (`git hash-object -w`), or the old branch tip, kept
+alive under `refs/seam/undo/*`. ⌘Z outside a text field undoes the last git action; ⇧⌘Z redoes it.
+Pushes can't be undone. Undo history lasts until the window closes.
+
+`app-icon.svg` is the icon source: `pnpm tauri icon app-icon.svg` regenerates `src-tauri/icons`.
+
+## License
+
+[AGPL-3.0-only](LICENSE).
