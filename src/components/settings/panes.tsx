@@ -5,6 +5,7 @@ import type { Mode } from '../../lib/themes';
 import type {
     AiConfig,
     CliStatus,
+    NotifyPrefs,
     Provider,
     ProviderStatus,
     ReviewFocusArea,
@@ -125,6 +126,8 @@ export function GeneralPane() {
                 />
             </Row>
 
+            <NotificationsSection />
+
             <SectionLabel>Menu bar</SectionLabel>
             <Row
                 desc="Closing the last window leaves Seam in the menu bar, with your recent repositories and a review of the current branch one click away. Quit from there or with ⌘Q."
@@ -155,6 +158,68 @@ export function GeneralPane() {
             </Row>
 
             <TerminalSection />
+        </>
+    );
+}
+
+function NotificationsSection() {
+    const [prefs, setPrefs] = useState<NotifyPrefs | null>(null);
+    const [sounds, setSounds] = useState<string[]>([]);
+
+    useEffect(() => {
+        void api.notifyPrefs().then(setPrefs);
+        void api.sounds().then(setSounds);
+    }, []);
+
+    if (!prefs) {
+        return null;
+    }
+
+    const save = (patch: Partial<NotifyPrefs>) => {
+        const next = { ...prefs, ...patch };
+
+        setPrefs(next);
+        void api.setNotifyPrefs(next);
+    };
+
+    return (
+        <>
+            <SectionLabel>When an AI run finishes</SectionLabel>
+            <Row
+                desc="A notification when a review, recap or plan is ready or has failed, shown while its window isn't in front. Seam keeps working after you close the window."
+                title="Notify me"
+            >
+                <Toggle
+                    label="Notify me"
+                    on={prefs.banner}
+                    onChange={(banner) => save({ banner })}
+                />
+            </Row>
+            <Row desc="Plays whether or not Seam is in front." last title="Sound">
+                <select
+                    aria-label="Sound"
+                    className={SELECT}
+                    onChange={(event) => {
+                        save({ sound: event.target.value });
+                        void api.playSound(event.target.value);
+                    }}
+                    value={prefs.sound}
+                >
+                    <option value="">None</option>
+                    {sounds.map((sound) => (
+                        <option key={sound} value={sound}>
+                            {sound}
+                        </option>
+                    ))}
+                </select>
+                <Button
+                    disabled={!prefs.sound}
+                    onClick={() => void api.playSound(prefs.sound)}
+                    size="sm"
+                >
+                    Play
+                </Button>
+            </Row>
         </>
     );
 }
