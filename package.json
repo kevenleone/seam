@@ -1,0 +1,53 @@
+{
+    "dependencies": {
+        "@fontsource/ibm-plex-sans": "^5.3.0",
+        "@fontsource/jetbrains-mono": "^5.3.0",
+        "@tanstack/react-virtual": "^3.14.20",
+        "@tauri-apps/api": "^2.12.4",
+        "@tauri-apps/plugin-dialog": "^2.8.3",
+        "@tauri-apps/plugin-opener": "^2.7.2",
+        "react": "^19.3.1",
+        "react-dom": "^19.3.1",
+        "zustand": "^5.0.15"
+    },
+    "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "@stylistic/eslint-plugin": "^5.10.0",
+        "@tailwindcss/vite": "^4.3.3",
+        "@tauri-apps/cli": "^2.12.3",
+        "@types/react": "^19.3.0",
+        "@types/react-dom": "^19.3.0",
+        "@vitejs/plugin-react": "^6.1.2",
+        "eslint": "^10.12.0",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-jsonc": "^3.4.2",
+        "eslint-plugin-perfectionist": "^5.12.1",
+        "eslint-plugin-prettier": "^5.5.7",
+        "prettier": "^3.9.10",
+        "prettier-plugin-sort-json": "^4.2.0",
+        "prettier-plugin-tailwindcss": "^0.8.1",
+        "tailwindcss": "^4.3.3",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.71.2",
+        "vite": "^8.3.4"
+    },
+    "license": "AGPL-3.0-only",
+    "name": "seam",
+    "packageManager": "pnpm@11.17.0",
+    "private": true,
+    "scripts": {
+        "app:build": "tauri build",
+        "app:dev": "tauri dev",
+        "build": "tsc --noEmit && vite build",
+        "dev": "vite",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "tauri": "tauri",
+        "test": "cd src-tauri && cargo test",
+        "typecheck": "tsc --noEmit"
+    },
+    "type": "module",
+    "version": "0.1.0"
+}

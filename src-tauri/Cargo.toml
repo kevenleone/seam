@@ -1,0 +1,36 @@
+[package]
+name = "seam"
+version = "0.1.0" # x-release-please-version
+description = "Seam — everyday git, undoable"
+edition = "2021"
+
+[lib]
+name = "seam_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["process", "io-util", "sync", "time", "macros", "rt-multi-thread", "fs"] }
+notify = "8"
+notify-debouncer-mini = "0.7"
+thiserror = "2"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3"
+
+# The macOS 27 toolchain's `strip` corrupts Mach-O files ("mis-aligned LINKEDIT string pool"):
+# dyld then refuses proc-macro dylibs (release builds fail with "can't find crate for
+# `phf_macros`") and would refuse the app binary too. Don't strip until that's fixed.
+[profile.release]
+strip = false
+
+[profile.release.build-override]
+strip = false
