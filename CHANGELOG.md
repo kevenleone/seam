@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.3.0](https://github.com/kevenleone/seam/compare/v0.2.0...v0.3.0) (2026-10-17)
+
+
+### Features
+
+* **host:** draw visual recaps and plans with the configured AI ([bb3d9c2](https://github.com/kevenleone/seam/commit/bb3d9c2e67a834f5e5eb75ef1efb6896e1f38ff5))
+* **host:** install and remove the seam command in PATH ([a5be3e1](https://github.com/kevenleone/seam/commit/a5be3e194a6b3101738c20c998d14fb0772ce78d))
+* **host:** notify and play a sound when an AI run finishes ([cf88d32](https://github.com/kevenleone/seam/commit/cf88d32963309005dbd91c11cb69d8fdf60e87df))
+* **ui:** add the Visual tab with recaps, plans and exports ([3ac4b82](https://github.com/kevenleone/seam/commit/3ac4b82e48154c0b8d2e947fb8899eca5b411468))
+* **ui:** configure notifications and sounds in Settings › General ([328ac16](https://github.com/kevenleone/seam/commit/328ac16ddc56cdca67945523d004112d54e7873c))
+* **ui:** highlight code in diffs, with a setting to turn it off ([77c83f2](https://github.com/kevenleone/seam/commit/77c83f23375ce6e9ff66de13296518b418ed5753))
+* **ui:** install the seam command from Settings › General ([2d4d05d](https://github.com/kevenleone/seam/commit/2d4d05d6395dd6c7a7396b858cc2bd3255a48d61))
+* **ui:** show the change while a visual draws, and fit, width and file diffs ([afb4829](https://github.com/kevenleone/seam/commit/afb482926883052cb606bd98e95f46ac110e0a23))
+
+
+### Bug Fixes
+
+* **site:** stop screenshots being dragged or selected ([01f94fd](https://github.com/kevenleone/seam/commit/01f94fd83a6a306de10bab9eb7f107f3d3016b68))
+* **ui:** let an exported visual scroll and be selected ([670eb84](https://github.com/kevenleone/seam/commit/670eb84c7ee8551e87262176243e26bfbc54c178))
+* **ui:** wrap long lines in split diffs so both sides stay in view ([35c9277](https://github.com/kevenleone/seam/commit/35c92771de974f7479c36648fafd4c8b9bb80f3f))
+
+
+### Refactoring
+
+* **engine:** share JSON extraction and diff clipping across AI features ([fa35dcc](https://github.com/kevenleone/seam/commit/fa35dcc7e7011943ccece0d25947b642194817de))
+* **ui:** share the provider picker and running panel ([ce7ed8e](https://github.com/kevenleone/seam/commit/ce7ed8e9f2533ac08e86e6e7d0dab17ed8099414))
+
+
+### Documentation
+
+* describe the seam command ([5df2e16](https://github.com/kevenleone/seam/commit/5df2e1690ba949aed02af7d856cf17d9094a6226))
+* describe visual recaps and plans ([adb51aa](https://github.com/kevenleone/seam/commit/adb51aa515407ca5fbe4fb7b37a3bdb9965dacbe))
+* retake screenshots with syntax highlighting ([b5fd6e5](https://github.com/kevenleone/seam/commit/b5fd6e5aa3a0c3d7f954641ae9d72e223cedfaa2))
+
 ## [0.2.0](https://github.com/kevenleone/seam/compare/v0.1.0...v0.2.0) (2026-10-17)
 
 
