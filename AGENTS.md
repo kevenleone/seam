@@ -84,6 +84,16 @@ it leniently. The last review is saved in `.git/seam/review.json`.
 `SEAM_LIVE_AI=claude cargo test --test review -- --ignored` runs a real model
 end to end; any provider id works there.
 
+`src/visual.rs` is the Visual tab on the same footing: a recap of the review's
+scope, or a plan for a change the user describes, asked for as one JSON document
+of typed blocks (wireframe screens, diagrams, decisions, contracts, key diffs,
+test steps). Parsing grounds it in the diff: file stats come from git, and diff
+blocks naming a file outside it are dropped. The last recap is saved in
+`.git/seam/recap.json`, plans in `.git/seam/plans/`. The renderer draws it in
+`src/components/visual/` and exports it to HTML, PDF, Markdown and Excalidraw
+(`src/lib/visualExport.ts`). `SEAM_LIVE_AI=claude cargo test --test visual -- --ignored`
+runs both kinds live; `SEAM_LIVE_OUT=<dir>` keeps the JSON they produced.
+
 `src/tray.rs` is the menu bar icon (recent projects, review the last-focused
 repository) and `src/prefs.rs` what the host remembers in the app data folder
 (the AI configuration and recent repositories). The host owns both because the
