@@ -25,8 +25,8 @@ provider APIs directly. Keys stay in the macOS Keychain.
 | History                                                                               | Review                                                                                          |
 | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
 | ![Three commits ticked in History, with their combined diff](docs/images/history.png) | ![An AI review with a comment under a changed line](docs/images/review.png)                     |
+| ![A staged change in the split layout](docs/images/changes-split.png)                 | ![The combined diff expanded to fill the window](docs/images/expanded.png)                      |
 | ![Settings, Appearance, with the theme gallery](docs/images/settings-appearance.png)  | ![Settings, AI: the model, its sign-in, and what reviews look for](docs/images/settings-ai.png) |
-| ![The Changes view in the light theme](docs/images/changes-light.png)                 | ![Seam in the Tokyo Night theme with a teal accent](docs/images/theme-tokyo-night.png)          |
 
 ## Develop
 
