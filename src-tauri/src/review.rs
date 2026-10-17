@@ -287,30 +287,8 @@ struct RawReview {
     findings: Vec<RawFinding>,
 }
 
-/// Pulls the JSON object out of an agent's answer, tolerating fences and stray prose.
 fn parse_answer(answer: &str) -> Result<(String, Vec<Finding>)> {
-    let cleaned = ai::strip_ansi(answer);
-    let candidates = [
-        cleaned.trim().to_string(),
-        cleaned
-            .split("```")
-            .nth(1)
-            .map(|block| block.trim_start_matches("json").trim().to_string())
-            .unwrap_or_default(),
-        match (cleaned.find('{'), cleaned.rfind('}')) {
-            (Some(start), Some(end)) if end > start => cleaned[start..=end].to_string(),
-            _ => String::new(),
-        },
-    ];
-    let raw = candidates
-        .iter()
-        .find_map(|c| serde_json::from_str::<RawReview>(c).ok())
-        .ok_or_else(|| {
-            let preview: String = cleaned.trim().chars().take(400).collect();
-            GitError::new(format!(
-                "The agent's answer wasn't the expected JSON:\n{preview}"
-            ))
-        })?;
+    let raw: RawReview = ai::json_object(answer).ok_or_else(|| ai::not_json(answer))?;
     let findings = raw
         .findings
         .into_iter()
@@ -339,18 +317,21 @@ fn parse_answer(answer: &str) -> Result<(String, Vec<Finding>)> {
     Ok((raw.summary.unwrap_or_default(), findings))
 }
 
+/// The diff as sent to a model, cut at `MAX_DIFF_CHARS`, and whether it was cut.
+pub fn clip(diff_text: &str) -> (&str, bool) {
+    if diff_text.len() <= MAX_DIFF_CHARS {
+        return (diff_text, false);
+    }
+    let mut cut = MAX_DIFF_CHARS;
+    while !diff_text.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    (&diff_text[..cut], true)
+}
+
 pub async fn run(config: &AiConfig, root: &Path, scope: Scope) -> Result<Review> {
     let started = Instant::now();
-    let truncated = scope.diff_text.len() > MAX_DIFF_CHARS;
-    let diff = if truncated {
-        let mut cut = MAX_DIFF_CHARS;
-        while !scope.diff_text.is_char_boundary(cut) {
-            cut -= 1;
-        }
-        &scope.diff_text[..cut]
-    } else {
-        &scope.diff_text
-    };
+    let (diff, truncated) = clip(&scope.diff_text);
     let answer = ai::ask(config, root, &prompt(config, &scope, diff, truncated)).await?;
     let (summary, findings) = parse_answer(&answer)?;
     Ok(Review {
