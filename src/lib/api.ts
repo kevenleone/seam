@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 
 import type {
     AiConfig,
+    CliStatus,
     Commit,
     Detail,
     DiffSource,
@@ -23,6 +24,7 @@ export const api = {
     aiProviders: () => invoke<ProviderStatus[]>('ai_providers'),
     cancelReview: (root: string) => invoke<void>('cancel_review', { root }),
     clearAiKey: (provider: Provider) => invoke<void>('clear_ai_key', { provider }),
+    cliStatus: () => invoke<CliStatus>('cli_status'),
     cloneRepository: (url: string, destination: string) =>
         invoke<void>('clone_repository', { destination, url }),
     commitDetail: (root: string, sha: string, ignoreWhitespace: boolean) =>
@@ -52,6 +54,7 @@ export const api = {
 
     setAiConfig: (config: AiConfig) => invoke<void>('set_ai_config', { config }),
     setAiKey: (provider: Provider, key: string) => invoke<void>('set_ai_key', { key, provider }),
+    setCliInstalled: (installed: boolean) => invoke<CliStatus>('set_cli_installed', { installed }),
     setGitPath: (path: null | string) => invoke<void>('set_git_path', { path }),
     snapshot: (root: string) => invoke<Snapshot>('snapshot', { root }),
     startReview: (root: string, provider: null | Provider) =>
