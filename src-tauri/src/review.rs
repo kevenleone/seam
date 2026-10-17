@@ -58,11 +58,14 @@ pub struct Review {
 )]
 pub enum ReviewState {
     Idle,
+    /// Carries the change being read, so it can be shown while the model works.
     Running {
         provider: Provider,
         scope: String,
         files: usize,
         started_at: i64,
+        commits: Vec<String>,
+        diffs: Vec<FileDiff>,
     },
     Done {
         review: Review,

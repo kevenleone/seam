@@ -626,6 +626,8 @@ async fn start_review_task(app: &AppHandle, root: PathBuf, config: AiConfig) -> 
         scope: scope.label.clone(),
         files: scope.diffs.len(),
         started_at: review::now_secs(),
+        commits: scope.commits.clone(),
+        diffs: scope.diffs.clone(),
     });
 
     let handle = app.clone();
