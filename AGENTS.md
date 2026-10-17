@@ -88,8 +88,9 @@ end to end; any provider id works there.
 scope, or a plan for a change the user describes, asked for as one JSON document
 of typed blocks (wireframe screens, diagrams, decisions, contracts, key diffs,
 test steps). Parsing grounds it in the diff: file stats come from git, and diff
-blocks naming a file outside it are dropped. The last recap is saved in
-`.git/seam/recap.json`, plans in `.git/seam/plans/`. The renderer draws it in
+blocks naming a file outside it are dropped. Recaps and plans are kept in
+`.git/seam/recaps/` and `.git/seam/plans/` (the newest 30 of each, listed by an
+`index.json`); a recap remembers its branch and is shown only on it. The renderer draws it in
 `src/components/visual/` and exports it to HTML, PDF, Markdown and Excalidraw
 (`src/lib/visualExport.ts`). `SEAM_LIVE_AI=claude cargo test --test visual -- --ignored`
 runs both kinds live; `SEAM_LIVE_OUT=<dir>` keeps the JSON they produced.
