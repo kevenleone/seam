@@ -14,6 +14,10 @@ lines, commit, stash, rename or remove commits, and undo any of it with ⌘Z.
 - **Review**: an AI review of the branch with comments on the lines they refer to, by the
   coding agent you already use (Claude Code, Codex, OpenCode) or a model provider under your
   own key (Anthropic, OpenAI, Google Gemini, or any OpenAI-compatible endpoint such as Ollama).
+- **Visual**: a recap of the branch, or a plan for a change you describe, drawn by the same
+  model: before/after wireframes with numbered notes, architecture diagrams, decisions, the
+  files touched, key diffs and how to test it. Export it as a web page, PDF, Markdown or
+  Excalidraw.
 - **Menu bar**: recent repositories and a one-click review, with Seam running in the background.
 - **Settings** (⌘,): 18 themes with separate light and dark picks, accents, AI provider and review
   style. Expand any diff to fill the window with ⇧⌘E.
