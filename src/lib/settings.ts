@@ -132,6 +132,7 @@ export function useSettings(): Settings {
             return () => listeners.delete(listener);
         },
         () => current,
+        () => current,
     );
 }
 

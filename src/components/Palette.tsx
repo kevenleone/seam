@@ -294,6 +294,28 @@ function commands(): Command[] {
         title: 'Show review',
     });
     add({
+        group: 'Visual',
+        hint: s.recap.status === 'running' ? 'running…' : 'wireframes, diagrams and key diffs',
+        id: 'recap',
+        keys: '⇧⌘V',
+        run: () => s.startVisual('recap'),
+        title: `Visual recap of ${branchLabel(status)}`,
+    });
+    add({
+        group: 'Visual',
+        hint: 'a visual proposal before any code is written',
+        id: 'plan',
+        run: () => s.set({ tab: 'visual', visualKind: 'plan' }),
+        title: 'Plan a change…',
+    });
+    add({
+        group: 'Visual',
+        id: 'show-visual',
+        keys: '⌘4',
+        run: () => s.set({ tab: 'visual' }),
+        title: 'Show visual',
+    });
+    add({
         group: 'View',
         id: 'changes',
         keys: '⌘1',

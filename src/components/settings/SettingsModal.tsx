@@ -45,7 +45,7 @@ const PANES: PaneDefinition[] = [
         icon: 'keyboard',
         id: 'shortcuts',
         label: 'Keyboard Shortcuts',
-        terms: 'keys hotkeys commit stage undo sidebar panel expand review',
+        terms: 'keys hotkeys commit stage undo sidebar panel expand review visual recap',
     },
     {
         Body: AboutPane,

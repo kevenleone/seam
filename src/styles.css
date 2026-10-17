@@ -4,6 +4,7 @@
 @import '@fontsource/ibm-plex-sans/600.css';
 @import '@fontsource/jetbrains-mono/400.css';
 @import '@fontsource/jetbrains-mono/500.css';
+@import '@fontsource/patrick-hand/400.css';
 
 /* Seam tokens, taken from the design canvas. Dark is the reference; light mirrors it. */
 :root,
@@ -214,6 +215,78 @@
 [data-motion='reduced'] *::after {
     animation-duration: 0s !important;
     transition-duration: 0s !important;
+}
+
+/* Prose in a visual recap or plan: what `marked` makes of the model's markdown. */
+.vz-prose {
+    line-height: 1.6;
+    color: var(--fg-body);
+}
+.vz-prose p,
+.vz-prose ul,
+.vz-prose ol {
+    margin: 0 0 0.6em;
+}
+.vz-prose > :last-child {
+    margin-bottom: 0;
+}
+.vz-prose ul,
+.vz-prose ol {
+    padding-left: 1.3em;
+}
+.vz-prose code {
+    padding: 0.1em 0.35em;
+    border-radius: 4px;
+    background: var(--control);
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+    font-size: 0.88em;
+}
+.vz-prose pre {
+    overflow-x: auto;
+    padding: 0.6em 0.8em;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--app);
+}
+.vz-prose pre code {
+    padding: 0;
+    background: none;
+}
+.vz-prose a {
+    color: var(--accent-strong);
+    text-decoration: underline;
+}
+.vz-prose strong {
+    color: var(--fg);
+    font-weight: 600;
+}
+
+/* The print copy of a visual is the only thing on paper; on screen it is never shown. */
+.vz-print {
+    display: none;
+}
+@media print {
+    html,
+    body {
+        height: auto;
+        background: var(--app);
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+    #root {
+        display: none;
+    }
+    .vz-print {
+        display: block;
+        color: var(--fg);
+        font-family: 'IBM Plex Sans', system-ui, sans-serif;
+        font-size: 13px;
+    }
+    .vz-print section,
+    .vz-print figure,
+    .vz-print .vz-canvas {
+        break-inside: avoid;
+    }
 }
 
 :focus-visible {
