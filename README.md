@@ -7,7 +7,8 @@ lines, commit, stash, rename or remove commits, and undo any of it with ⌘Z.
 
 [Website](https://kevenleone.github.io/seam/) · [Download](https://github.com/kevenleone/seam/releases/latest)
 
-- **Changes**: stage, unstage or discard single lines and hunks; commit or amend.
+- **Changes**: stage, unstage or discard single lines and hunks; commit or amend. Diffs are
+  syntax highlighted for the common languages, in every theme.
 - **History**: ⌘/⇧-click commits to squash, remove, cherry-pick or see their combined diff;
   rename, revert or reset any commit; branches, stashes and tags.
 - **Review**: an AI review of the branch with comments on the lines they refer to, by the
