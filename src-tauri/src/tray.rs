@@ -15,12 +15,17 @@ use crate::AppState;
 
 const TRAY_ID: &str = "seam";
 const MAX_RECENTS: usize = 8;
+const ICON: &[u8] = if cfg!(debug_assertions) {
+    include_bytes!("../icons/dev/tray.png")
+} else {
+    include_bytes!("../icons/tray.png")
+};
 
 pub fn create(app: &AppHandle) -> tauri::Result<()> {
     TrayIconBuilder::with_id(TRAY_ID)
-        .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
+        .icon(Image::from_bytes(ICON)?)
         .icon_as_template(true)
-        .tooltip("Seam")
+        .tooltip(&app.package_info().name)
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| on_menu(app, event.id().as_ref()))
         .build(app)?;

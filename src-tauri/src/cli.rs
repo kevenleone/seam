@@ -124,8 +124,9 @@ fn try_install<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, Failure> {
         Ok(metadata) if metadata.file_type().is_symlink() => true,
         Ok(_) => {
             return Err(Failure::Reason(format!(
-                "{} already exists and is not a link Seam made, so it was left alone.",
-                link.display()
+                "{} already exists and is not a link {} made, so it was left alone.",
+                link.display(),
+                app.package_info().name
             )));
         }
         Err(_) => false,
@@ -144,7 +145,10 @@ fn try_install<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, Failure> {
         let (script, link) = (script.to_string_lossy(), link.to_string_lossy());
 
         elevate(
-            &format!("Seam wants to add the “{CLI_NAME}” command to {BIN_DIR}."),
+            &format!(
+                "{} wants to add the “{CLI_NAME}” command to {BIN_DIR}.",
+                app.package_info().name
+            ),
             &["/bin/sh", "-c", LINK, "sh", BIN_DIR, &script, &link],
         )?;
     }
@@ -165,7 +169,10 @@ fn try_uninstall<R: Runtime>(app: &AppHandle<R>) -> Result<(), Failure> {
     }
 
     elevate(
-        &format!("Seam wants to remove the “{CLI_NAME}” command from {BIN_DIR}."),
+        &format!(
+            "{} wants to remove the “{CLI_NAME}” command from {BIN_DIR}.",
+            app.package_info().name
+        ),
         &["/bin/rm", "-f", &link.to_string_lossy()],
     )
 }

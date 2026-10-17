@@ -114,7 +114,7 @@ fn show_welcome(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         WELCOME,
         WebviewUrl::App("index.html?view=welcome".into()),
     )
-    .title("Welcome to Seam")
+    .title(format!("Welcome to {}", app.package_info().name))
     .inner_size(780.0, 480.0)
     .resizable(false)
     .title_bar_style(TitleBarStyle::Overlay)
@@ -144,7 +144,7 @@ fn show_settings(app: &AppHandle, pane: Option<&str>) -> tauri::Result<WebviewWi
         pane.unwrap_or("general")
     );
     WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(url.into()))
-        .title("Seam Settings")
+        .title(format!("{} Settings", app.package_info().name))
         .inner_size(1000.0, 700.0)
         .min_inner_size(820.0, 560.0)
         .title_bar_style(TitleBarStyle::Overlay)
@@ -1133,12 +1133,13 @@ async fn watch(
 fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let item =
         |id: &str, title: &str, accel: Option<&str>| MenuItem::with_id(app, id, title, true, accel);
+    let name = &app.package_info().name;
     let app_menu = Submenu::with_items(
         app,
-        "Seam",
+        name,
         true,
         &[
-            &PredefinedMenuItem::about(app, Some("About Seam"), None)?,
+            &PredefinedMenuItem::about(app, Some(&format!("About {name}")), None)?,
             &PredefinedMenuItem::separator(app)?,
             &item("settings", "Settings…", Some("CmdOrCtrl+,"))?,
             &item(
@@ -1149,13 +1150,13 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &PredefinedMenuItem::separator(app)?,
             &PredefinedMenuItem::services(app, None)?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::hide(app, None)?,
+            &PredefinedMenuItem::hide(app, Some(&format!("Hide {name}")))?,
             &PredefinedMenuItem::hide_others(app, None)?,
             &PredefinedMenuItem::show_all(app, None)?,
             &PredefinedMenuItem::separator(app)?,
             // Our own Quit: closing the last window keeps Seam in the menu bar, so ⌘Q has to
             // exit explicitly instead of going through the "all windows closed" path.
-            &item("quit", "Quit Seam", Some("CmdOrCtrl+Q"))?,
+            &item("quit", &format!("Quit {name}"), Some("CmdOrCtrl+Q"))?,
         ],
     )?;
     let file = Submenu::with_items(
