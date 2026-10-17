@@ -1,0 +1,186 @@
+// Mirrors src-tauri/src/git/models.rs (serde camelCase).
+
+export interface Branch {
+    ahead: number;
+    behind: number;
+    fullName: string;
+    isCurrent: boolean;
+    isRemote: boolean;
+    name: string;
+    sha: string;
+    upstream: null | string;
+    upstreamGone: boolean;
+}
+export interface BranchStatus {
+    ahead: number;
+    behind: number;
+    head: null | string;
+    oid: null | string;
+    upstream: null | string;
+}
+
+export type ChangeArea = 'conflicted' | 'staged' | 'unstaged' | 'untracked';
+
+export type ChangeKind =
+    | 'added'
+    | 'conflicted'
+    | 'copied'
+    | 'deleted'
+    | 'modified'
+    | 'renamed'
+    | 'typeChanged'
+    | 'untracked';
+
+export interface Commit {
+    authorEmail: string;
+    authorName: string;
+    body: string;
+    date: number;
+    parents: string[];
+    refs: string[];
+    sha: string;
+    subject: string;
+}
+
+export interface CommitFileStat {
+    additions: null | number;
+    deletions: null | number;
+    path: string;
+}
+
+export type ConflictSide = 'ours' | 'theirs';
+
+export interface Detail {
+    commit: Commit | null;
+    diffs: FileDiff[];
+    files: CommitFileStat[];
+}
+
+export interface DiffLine {
+    id: number;
+    kind: LineKind;
+    newNumber: null | number;
+    oldNumber: null | number;
+    text: string;
+}
+
+export type DiffSource = 'staged' | 'unstaged' | 'untracked';
+
+export interface FileChange {
+    area: ChangeArea;
+    kind: ChangeKind;
+    originalPath: null | string;
+    path: string;
+}
+
+export interface FileDiff {
+    additions: number;
+    deletions: number;
+    headerLines: string[];
+    hunks: Hunk[];
+    isBinary: boolean;
+    newPath: null | string;
+    oldPath: null | string;
+}
+
+export interface HistoryMeta {
+    branches: Branch[];
+    remotes: Remote[];
+    stashes: Stash[];
+    tags: Tag[];
+    unpushed: string[];
+}
+
+export interface Hunk {
+    id: number;
+    lines: DiffLine[];
+    newCount: number;
+    newStart: number;
+    oldCount: number;
+    oldStart: number;
+    section: string;
+}
+
+export type InProgress =
+    | { headName: null | string; kind: 'rebase'; step: null | number; total: null | number }
+    | { kind: 'cherryPick' }
+    | { kind: 'merge' }
+    | { kind: 'revert' };
+
+export type LineAction = 'discard' | 'stage' | 'unstage';
+
+export type LineKind = 'addition' | 'context' | 'deletion' | 'noNewline';
+/** Every action the backend can perform and undo; mirrors `Op` in ops.rs. */
+export type Op =
+    | {
+          action: LineAction;
+          file: FileDiff;
+          selection: null | Record<number, number[]>;
+          type: 'applyLines';
+      }
+    | { amend: boolean; message: string; type: 'commit' }
+    | { branch: string; type: 'checkout' }
+    | { changes: FileChange[]; type: 'discard' }
+    | { checkout: boolean; name: string; start: null | string; type: 'createBranch' }
+    | { force: boolean; name: string; type: 'deleteBranch' }
+    | { force: boolean; type: 'push' }
+    | { includeUntracked: boolean; message: null | string; paths: string[]; type: 'stashPush' }
+    | { message: null | string; name: string; sha: string; type: 'createTag' }
+    | { message: string; sha: string; type: 'reword' }
+    | { message: string; shas: string[]; type: 'squash' }
+    | { mode: PullMode; type: 'pull' }
+    | { mode: ResetMode; sha: string; type: 'reset' }
+    | { name: string; type: 'deleteTag' }
+    | { new: string; old: string; type: 'renameBranch' }
+    | { path: string; side: ConflictSide | null; type: 'resolve' }
+    | { paths: string[]; type: 'stage' }
+    | { paths: string[]; type: 'unstage' }
+    | { pop: boolean; stash: Stash; type: 'stashApply' }
+    | { sha: string; type: 'revert' }
+    | { shas: string[]; type: 'cherryPick' }
+    | { shas: string[]; type: 'drop' }
+    | { stash: Stash; type: 'stashDrop' }
+    | { type: 'abort' }
+    | { type: 'continue' }
+    | { type: 'fetch' }
+    | { type: 'skip' }
+    | { type: 'stageAll' }
+    | { type: 'uncommit' }
+    | { type: 'unstageAll' };
+export interface Outcome {
+    message: string;
+    undoable: boolean;
+}
+export type PullMode = 'fastForwardOnly' | 'merge' | 'rebase';
+export interface Remote {
+    name: string;
+    url: string;
+}
+
+export interface RepoStatus {
+    branch: BranchStatus;
+    conflicted: FileChange[];
+    staged: FileChange[];
+    unstaged: FileChange[];
+    untracked: FileChange[];
+}
+
+export type ResetMode = 'hard' | 'mixed' | 'soft';
+
+export interface Snapshot {
+    inProgress: InProgress | null;
+    lastCommit: Commit | null;
+    status: RepoStatus;
+}
+
+export interface Stash {
+    date: number;
+    index: number;
+    message: string;
+    sha: string;
+}
+
+export interface Tag {
+    name: string;
+    sha: string;
+}

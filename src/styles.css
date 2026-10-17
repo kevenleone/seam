@@ -1,0 +1,172 @@
+@import 'tailwindcss';
+@import '@fontsource/ibm-plex-sans/400.css';
+@import '@fontsource/ibm-plex-sans/500.css';
+@import '@fontsource/ibm-plex-sans/600.css';
+@import '@fontsource/jetbrains-mono/400.css';
+@import '@fontsource/jetbrains-mono/500.css';
+
+/* Seam tokens, taken from the design canvas. Dark is the reference; light mirrors it. */
+:root,
+[data-theme='dark'] {
+    --canvas: #0b0c0f;
+    --app: #121317;
+    --panel: #16171c;
+    --line: #24262d;
+    --control: #1d1f26;
+    --control-line: #2a2c34;
+    --hover: #1d1f26;
+    --selected: #23252e;
+    --tab-active: #33353f;
+    --fg: #e7e5e0;
+    --fg-body: #d9d7d1;
+    --fg-soft: #b3b4bc;
+    --muted: #9c9da6;
+    --dim: #7a7c86;
+    --add-bg: #13243a;
+    --add-gutter: #183154;
+    --add-num: #9cc3ee;
+    --add: #6cb6ff;
+    --add-line: #1f4675;
+    --del-bg: #2d1b10;
+    --del-gutter: #3e2515;
+    --del-num: #e8b48c;
+    --del: #f0a060;
+    --del-line: #4a2e1c;
+    --warn-fg: #f5b888;
+    --warn-bg: #24180f;
+    --accent: #b9a8ff;
+    --accent-strong: #d6ccff;
+    --accent-bg: #1a1827;
+    --accent-line: #3a3360;
+    --on-accent: #17142a;
+    --hunk: #1a1b21;
+    --shadow: rgba(0, 0, 0, 0.5);
+    color-scheme: dark;
+}
+
+[data-theme='light'] {
+    --canvas: #e9e8e4;
+    --app: #fbfaf7;
+    --panel: #f3f2ee;
+    --line: #e2e0da;
+    --control: #ffffff;
+    --control-line: #d6d4cd;
+    --hover: #ecebe6;
+    --selected: #e6e4de;
+    --tab-active: #ffffff;
+    --fg: #1b1b1f;
+    --fg-body: #2a2a30;
+    --fg-soft: #4a4b52;
+    --muted: #6b6c74;
+    --dim: #8a8b93;
+    --add-bg: #e4effb;
+    --add-gutter: #cfe2f7;
+    --add-num: #2f5f95;
+    --add: #0b5cad;
+    --add-line: #a9c8ec;
+    --del-bg: #fcede1;
+    --del-gutter: #f6d9c2;
+    --del-num: #8c4a1a;
+    --del: #a3500f;
+    --del-line: #ecc4a4;
+    --warn-fg: #8c4a1a;
+    --warn-bg: #fff3e6;
+    --accent: #6b55d6;
+    --accent-strong: #5641c0;
+    --accent-bg: #efecfd;
+    --accent-line: #cfc6f6;
+    --on-accent: #ffffff;
+    --hunk: #f0efea;
+    --shadow: rgba(0, 0, 0, 0.18);
+    color-scheme: light;
+}
+
+@theme inline {
+    --color-canvas: var(--canvas);
+    --color-app: var(--app);
+    --color-panel: var(--panel);
+    --color-line: var(--line);
+    --color-control: var(--control);
+    --color-control-line: var(--control-line);
+    --color-hover: var(--hover);
+    --color-selected: var(--selected);
+    --color-tab: var(--tab-active);
+    --color-fg: var(--fg);
+    --color-body: var(--fg-body);
+    --color-soft: var(--fg-soft);
+    --color-muted: var(--muted);
+    --color-dim: var(--dim);
+    --color-add-bg: var(--add-bg);
+    --color-add-gutter: var(--add-gutter);
+    --color-add-num: var(--add-num);
+    --color-add: var(--add);
+    --color-add-line: var(--add-line);
+    --color-del-bg: var(--del-bg);
+    --color-del-gutter: var(--del-gutter);
+    --color-del-num: var(--del-num);
+    --color-del: var(--del);
+    --color-del-line: var(--del-line);
+    --color-warn: var(--warn-fg);
+    --color-warn-bg: var(--warn-bg);
+    --color-accent: var(--accent);
+    --color-accent-strong: var(--accent-strong);
+    --color-accent-bg: var(--accent-bg);
+    --color-accent-line: var(--accent-line);
+    --color-on-accent: var(--on-accent);
+    --color-hunk: var(--hunk);
+    --font-sans: 'IBM Plex Sans', -apple-system, 'Helvetica Neue', sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
+}
+
+html,
+body,
+#root {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    background: var(--app);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+    overflow: hidden;
+}
+
+button,
+input,
+textarea,
+select {
+    font: inherit;
+    color: inherit;
+}
+
+input,
+textarea,
+.selectable {
+    user-select: text;
+    -webkit-user-select: text;
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+::-webkit-scrollbar-thumb {
+    background: var(--control-line);
+    border-radius: 6px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+}
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
