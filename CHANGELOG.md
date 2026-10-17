@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.4.0](https://github.com/kevenleone/seam/compare/v0.3.0...v0.4.0) (2026-10-17)
+
+
+### Features
+
+* **host:** keep a history of recaps and show each on its own branch ([d894341](https://github.com/kevenleone/seam/commit/d894341cb0f1e33dd1cb7004682fb223688e54b0))
+* **host:** read a diff's blobs, including the unwritten working-tree side ([993dad0](https://github.com/kevenleone/seam/commit/993dad0ea3728fa6ffcc88a1b2957d8cd990cc0c))
+* **host:** run the dev build as Seam Dev with its own identifier and icons ([8cbde78](https://github.com/kevenleone/seam/commit/8cbde7885d97fd6ec9b326555deecabdf095e5b5))
+* **ui:** browse every recap and plan, and follow the branch you are on ([2874531](https://github.com/kevenleone/seam/commit/287453136141f722bf36e51eb3dec75baae113b4))
+* **ui:** open a branch commit's changes from the recap's commit list ([4acb598](https://github.com/kevenleone/seam/commit/4acb598bf89bb4421fad7b1af356b585dfc8dc88))
+* **ui:** preview changed images in the diff ([d174224](https://github.com/kevenleone/seam/commit/d174224769306f2c0462fde4df9f4759974b5593))
+* **ui:** show the app's name next to its version ([2059e97](https://github.com/kevenleone/seam/commit/2059e97200a6de9c39a11f7f44b671b430af4ae7))
+* **ui:** show the change and the review style while a review runs, and a richer empty state ([2fda27e](https://github.com/kevenleone/seam/commit/2fda27e7f8456d71fdfbd42b070bad6091a91f58))
+
+
+### Refactoring
+
+* **ui:** share the run status, changed files and commits between AI views ([db8aaba](https://github.com/kevenleone/seam/commit/db8aaba70b7ed3eb840b3774bc1782014091869a))
+
+
+### Documentation
+
+* describe where recaps and plans are kept ([02da809](https://github.com/kevenleone/seam/commit/02da8090ea64c7962b90bf010b29f6c7de587438))
+* explain the Seam Dev config overlay ([6dd2930](https://github.com/kevenleone/seam/commit/6dd2930abc0be9339e4e3ebcefde622ef24a5382))
+
 ## [0.3.0](https://github.com/kevenleone/seam/compare/v0.2.0...v0.3.0) (2026-10-17)
 
 
