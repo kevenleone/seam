@@ -1,0 +1,80 @@
+name: CI
+
+on:
+    pull_request:
+    push:
+        branches:
+            - main
+
+permissions:
+    contents: read
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+env:
+    CARGO_TERM_COLOR: always
+
+jobs:
+    web:
+        name: Format, lint and typecheck
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            # No version pin: the action reads packageManager from package.json,
+            # which must stay the only place the pnpm version is declared.
+            - uses: pnpm/action-setup@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  cache: pnpm
+                  node-version: '22'
+
+            - run: pnpm install --frozen-lockfile
+
+            - run: pnpm format:check
+
+            - run: pnpm lint
+
+            - run: pnpm build
+
+    rust:
+        name: Rust (fmt, clippy, tests)
+        # macOS: the engine shells out to git and the login shell the way it does on users' Macs.
+        runs-on: macos-latest
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: pnpm/action-setup@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  cache: pnpm
+                  node-version: '22'
+
+            - uses: dtolnay/rust-toolchain@stable
+              with:
+                  components: clippy, rustfmt
+
+            - uses: swatinem/rust-cache@v2
+              with:
+                  workspaces: src-tauri -> target
+
+            - run: pnpm install --frozen-lockfile
+
+            # tauri::generate_context! embeds dist/, so it has to exist before cargo compiles.
+            - run: pnpm build
+
+            - name: cargo fmt
+              working-directory: src-tauri
+              run: cargo fmt --check
+
+            - name: cargo clippy
+              working-directory: src-tauri
+              run: cargo clippy --all-targets -- -D warnings
+
+            - name: cargo test
+              working-directory: src-tauri
+              run: cargo test
