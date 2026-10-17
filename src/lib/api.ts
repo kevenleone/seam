@@ -27,6 +27,9 @@ import type {
 export const api = {
     aiConfig: () => invoke<AiConfig>('ai_config'),
     aiProviders: () => invoke<ProviderStatus[]>('ai_providers'),
+    /** A blob's bytes; `path` lets an unwritten working-tree side be read from disk. */
+    blob: (root: string, object: string, path: null | string) =>
+        invoke<ArrayBuffer>('blob', { object, path, root }),
     cancelReview: (root: string) => invoke<void>('cancel_review', { root }),
     cancelVisual: (root: string, kind: VisualKind) => invoke<void>('cancel_visual', { kind, root }),
     clearAiKey: (provider: Provider) => invoke<void>('clear_ai_key', { provider }),
