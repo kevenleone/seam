@@ -4,8 +4,10 @@ import { createContext, useContext, useEffect, useMemo, useRef, useState } from 
 import type { ReviewFocus } from '../lib/store';
 import type { DiffLine, FileDiff, Finding, Hunk, LineAction } from '../lib/types';
 
+import { api } from '../lib/api';
+import { blobIds, imageType } from '../lib/diffImage';
 import { useSettings } from '../lib/settings';
-import { isChange } from '../lib/store';
+import { isChange, useRepo } from '../lib/store';
 import { useHighlighter } from '../lib/useHighlighter';
 import { FindingCard } from './FindingCard';
 import { Icon } from './Icon';
@@ -33,8 +35,14 @@ const Highlighted = createContext<null | WeakMap<DiffLine, string>>(null);
 /** Above this many lines a diff is shown plain: highlighting it would stall the window. */
 const HIGHLIGHT_LIMIT = 20_000;
 
+interface LoadedImage {
+    bytes: number;
+    url: string;
+}
+
 type Row =
     | { collapsed: boolean; diff: FileDiff; t: 'file' }
+    | { diff: FileDiff; t: 'image' }
     | { finding: Finding; t: 'comment' }
     | { hunk: Hunk; left: DiffLine | null; right: DiffLine | null; t: 'split' }
     | { hunk: Hunk; line: DiffLine; t: 'line' }
@@ -51,6 +59,7 @@ export function DiffView({
     interaction?: DiffInteraction;
 }) {
     const { codeSize, splitDiff, syntaxHighlight } = useSettings();
+    const root = useRepo((state) => state.root);
     const highlighter = useHighlighter(syntaxHighlight);
     const highlighted = useMemo(() => {
         const total = diffs.reduce(
@@ -139,7 +148,11 @@ export function DiffView({
                 rows.push({ finding, t: 'comment' });
             }
 
-            if (diff.isBinary) {
+            const ids = blobIds(diff);
+
+            if (diff.isBinary && root && imageType(id) && (ids.before || ids.after)) {
+                rows.push({ diff, t: 'image' });
+            } else if (diff.isBinary) {
                 rows.push({ t: 'note', text: 'Binary file changed' });
             } else if (!diff.hunks.length) {
                 rows.push({
@@ -175,7 +188,7 @@ export function DiffView({
         }
 
         return { maxChars, rows };
-    }, [diffs, splitDiff, collapsed, multi, comments?.findings]);
+    }, [diffs, splitDiff, collapsed, multi, comments?.findings, root]);
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const virtualizer = useVirtualizer({
@@ -187,9 +200,11 @@ export function DiffView({
                   ? 32
                   : rows[index].t === 'note'
                     ? 64
-                    : rows[index].t === 'comment'
-                      ? 140
-                      : lineHeight,
+                    : rows[index].t === 'image'
+                      ? 360
+                      : rows[index].t === 'comment'
+                        ? 140
+                        : lineHeight,
         getScrollElement: () => scrollRef.current,
         overscan: 30,
     });
@@ -289,6 +304,7 @@ export function DiffView({
                                         {row.text}
                                     </div>
                                 )}
+                                {row.t === 'image' && <ImagePreview diff={row.diff} root={root} />}
                                 {row.t === 'line' && (
                                     <UnifiedLine
                                         height={lineHeight}
@@ -346,6 +362,16 @@ function FileHeader({
     );
 }
 
+function formatBytes(bytes: number): string {
+    if (bytes < 1024) {
+        return `${bytes} B`;
+    }
+
+    return bytes < 1024 * 1024
+        ? `${(bytes / 1024).toFixed(1)} KB`
+        : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function HunkHeader({ hunk, interaction }: { hunk: Hunk; interaction?: DiffInteraction }) {
     const selected = interaction?.selection[hunk.id]?.length ?? 0;
 
@@ -392,6 +418,118 @@ function HunkHeader({ hunk, interaction }: { hunk: Hunk; interaction?: DiffInter
                         </Button>
                     ))
                 ))}
+        </div>
+    );
+}
+
+function ImagePane({
+    label,
+    object,
+    path,
+    root,
+    tone,
+    type,
+}: {
+    label: string;
+    object: string;
+    path: null | string;
+    root: string;
+    tone: 'add' | 'del';
+    type: string;
+}) {
+    const [image, setImage] = useState<'error' | LoadedImage | null>(null);
+    const [size, setSize] = useState<{ height: number; width: number } | null>(null);
+
+    useEffect(() => {
+        let cancelled = false;
+        let url: null | string = null;
+
+        api.blob(root, object, path)
+            .then((buffer) => {
+                if (cancelled) {
+                    return;
+                }
+
+                url = URL.createObjectURL(new Blob([buffer], { type }));
+                setImage({ bytes: buffer.byteLength, url });
+            })
+            .catch(() => !cancelled && setImage('error'));
+
+        return () => {
+            cancelled = true;
+
+            if (url) {
+                URL.revokeObjectURL(url);
+            }
+        };
+    }, [root, object, path, type]);
+
+    return (
+        <figure className="flex w-1/2 min-w-0 flex-col gap-2">
+            <figcaption className="flex items-center gap-2 text-[12px]">
+                <span className={tone === 'add' ? 'text-add' : 'text-del'}>{label}</span>
+                <span className="flex-1" />
+                {size && (
+                    <span className="text-muted">
+                        {size.width} × {size.height}
+                    </span>
+                )}
+                {image && image !== 'error' && (
+                    <span className="text-muted">{formatBytes(image.bytes)}</span>
+                )}
+            </figcaption>
+            <div
+                className={`flex min-h-32 items-center justify-center rounded-md border bg-[conic-gradient(var(--line)_25%,transparent_0_50%,var(--line)_0_75%,transparent_0)] bg-[length:16px_16px] p-3 ${tone === 'add' ? 'border-add' : 'border-del'}`}
+            >
+                {image === 'error' ? (
+                    <span className="text-muted">Can’t preview this image</span>
+                ) : (
+                    image && (
+                        <img
+                            alt={label}
+                            className="max-h-80 max-w-full object-contain"
+                            onLoad={(event) =>
+                                setSize({
+                                    height: event.currentTarget.naturalHeight,
+                                    width: event.currentTarget.naturalWidth,
+                                })
+                            }
+                            src={image.url}
+                        />
+                    )
+                )}
+            </div>
+        </figure>
+    );
+}
+
+function ImagePreview({ diff, root }: { diff: FileDiff; root: string }) {
+    const path = diff.newPath ?? diff.oldPath ?? '';
+    const type = imageType(path) ?? '';
+    const { after, before } = blobIds(diff);
+
+    return (
+        <div className="sticky left-0 flex w-full justify-center gap-4 p-4 font-sans">
+            {before && (
+                <ImagePane
+                    label={after ? 'Before' : 'Deleted'}
+                    object={before}
+                    path={null}
+                    root={root}
+                    tone="del"
+                    type={type}
+                />
+            )}
+            {after && (
+                <ImagePane
+                    label={before ? 'After' : 'Added'}
+                    object={after}
+                    path={diff.newPath}
+                    root={root}
+                    tone="add"
+                    type={type}
+                />
+            )}
         </div>
     );
 }
