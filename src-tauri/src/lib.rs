@@ -1,4 +1,8 @@
+pub mod ai;
 pub mod git;
+mod prefs;
+pub mod review;
+mod tray;
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
@@ -7,10 +11,13 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use ai::{AiConfig, Provider, ProviderStatus, TestResult};
 use git::models::*;
 use git::ops::{self, History, Op, Outcome};
 use git::{GitError, Repo};
 use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode, DebounceEventResult, Debouncer};
+use prefs::PrefsStore;
+use review::ReviewState;
 use serde::Serialize;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{
@@ -27,6 +34,14 @@ struct AppState {
     /// One lock per repository so actions (and undos) run one at a time.
     locks: Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
     watchers: Mutex<HashMap<String, Debouncer<notify_debouncer_mini::notify::RecommendedWatcher>>>,
+    reviews: Mutex<HashMap<PathBuf, ReviewState>>,
+    review_tasks: Mutex<HashMap<PathBuf, tauri::async_runtime::JoinHandle<()>>>,
+    /// Which repository each window shows, by window label.
+    window_roots: Mutex<HashMap<String, PathBuf>>,
+    /// The repository window focused last; the tray offers to review it.
+    last_repo: Mutex<Option<PathBuf>>,
+    /// Repositories behind the tray's numbered menu ids.
+    tray_targets: Mutex<Vec<PathBuf>>,
 }
 
 impl AppState {
@@ -106,16 +121,58 @@ fn show_welcome(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     .inspect(|w| reveal_later(w.clone()))
 }
 
-/// Opens (or focuses) the window for the repository containing `path`.
-async fn open_repo_window(app: &AppHandle, path: &Path) -> CmdResult<()> {
+const SETTINGS: &str = "settings";
+
+/// Settings in a window of their own, for when no repository window is there to hold the sheet.
+fn show_settings(app: &AppHandle, pane: Option<&str>) -> tauri::Result<WebviewWindow> {
+    if let Some(window) = app.get_webview_window(SETTINGS) {
+        if let Some(pane) = pane {
+            let _ = app.emit_to(SETTINGS, "show-pane", pane);
+        }
+        window.show()?;
+        window.set_focus()?;
+        return Ok(window);
+    }
+    let url = format!(
+        "index.html?view=settings&pane={}",
+        pane.unwrap_or("general")
+    );
+    WebviewWindowBuilder::new(app, SETTINGS, WebviewUrl::App(url.into()))
+        .title("Seam Settings")
+        .inner_size(1000.0, 700.0)
+        .min_inner_size(820.0, 560.0)
+        .title_bar_style(TitleBarStyle::Overlay)
+        .hidden_title(true)
+        .traffic_light_position(traffic_lights())
+        .background_color(BACKGROUND)
+        .visible(false)
+        .center()
+        .build()
+        .inspect(|w| reveal_later(w.clone()))
+}
+
+#[tauri::command]
+fn open_settings_window(app: AppHandle, pane: Option<String>) {
+    let _ = show_settings(&app, pane.as_deref());
+}
+
+/// Opens (or focuses) the window for the repository containing `path`, optionally on a tab.
+async fn open_repo_window(app: &AppHandle, path: &Path, tab: Option<&str>) -> CmdResult<()> {
     let root = Repo::top_level(path).await.ok_or_else(|| {
         GitError::new(format!("{} isn't inside a git repository.", path.display()))
     })?;
     let label = repo_label(&root);
     if let Some(w) = app.get_webview_window(&label) {
+        let _ = w.show();
         let _ = w.set_focus();
+        if let Some(tab) = tab {
+            let _ = app.emit_to(&label, "show-tab", tab);
+        }
     } else {
-        let url = format!("index.html?repo={}", encode(&root.to_string_lossy()));
+        let mut url = format!("index.html?repo={}", encode(&root.to_string_lossy()));
+        if let Some(tab) = tab {
+            url.push_str(&format!("&tab={tab}"));
+        }
         WebviewWindowBuilder::new(app, &label, WebviewUrl::App(url.into()))
             .title(
                 root.file_name()
@@ -136,8 +193,29 @@ async fn open_repo_window(app: &AppHandle, path: &Path) -> CmdResult<()> {
     if let Some(w) = app.get_webview_window(WELCOME) {
         let _ = w.close();
     }
+    app.state::<AppState>()
+        .window_roots
+        .lock()
+        .unwrap()
+        .insert(label, root.clone());
+    *app.state::<AppState>().last_repo.lock().unwrap() = Some(root.clone());
+    app.state::<PrefsStore>().add_recent(&root);
     let _ = app.emit("recent-opened", root.to_string_lossy());
+    tray::refresh(app);
     Ok(())
+}
+
+/// Opens a repository window from a callback that can't wait, reporting failures in a dialog.
+fn spawn_open(app: &AppHandle, root: PathBuf, tab: Option<&'static str>) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = open_repo_window(&app, &root, tab).await {
+            app.dialog()
+                .message(e.message)
+                .title("Couldn't open repository")
+                .show(|_| {});
+        }
+    });
 }
 
 fn focused_window(app: &AppHandle) -> Option<WebviewWindow> {
@@ -156,7 +234,7 @@ fn pick_and_open(app: &AppHandle) {
                 return;
             };
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = open_repo_window(&handle, &path).await {
+                if let Err(e) = open_repo_window(&handle, &path, None).await {
                     handle
                         .dialog()
                         .message(e.message)
@@ -171,7 +249,7 @@ fn pick_and_open(app: &AppHandle) {
 
 #[tauri::command]
 async fn open_repository(app: AppHandle, path: String) -> CmdResult<()> {
-    open_repo_window(&app, Path::new(&path)).await
+    open_repo_window(&app, Path::new(&path), None).await
 }
 
 #[tauri::command]
@@ -210,7 +288,7 @@ async fn clone_repository(
     };
     let dest = PathBuf::from(&destination);
     Repo::clone_into(&url, &dest, &progress).await?;
-    open_repo_window(&app, &dest).await
+    open_repo_window(&app, &dest, None).await
 }
 
 #[tauri::command]
@@ -471,6 +549,209 @@ fn undo_titles(state: State<'_, AppState>, root: String) -> UndoState {
     undo_state(&state, Path::new(&root))
 }
 
+// MARK: Commands — review
+
+fn emit_review(app: &AppHandle, root: &Path) {
+    let _ = app.emit("review-updated", root.to_string_lossy());
+    tray::refresh(app);
+}
+
+/// The repository's review: the one running or finished this session, else the saved one.
+async fn review_state_for(app: &AppHandle, root: &Path) -> ReviewState {
+    if let Some(state) = app.state::<AppState>().reviews.lock().unwrap().get(root) {
+        return state.clone();
+    }
+    let state = match Repo::new(root)
+        .git_dir()
+        .await
+        .ok()
+        .and_then(|dir| review::load(&dir))
+    {
+        Some(review) => ReviewState::Done { review },
+        None => ReviewState::Idle,
+    };
+    app.state::<AppState>()
+        .reviews
+        .lock()
+        .unwrap()
+        .entry(root.to_path_buf())
+        .or_insert_with(|| state.clone());
+    state
+}
+
+fn previous_review(state: ReviewState) -> Option<review::Review> {
+    match state {
+        ReviewState::Done { review } => Some(review),
+        ReviewState::Failed { previous, .. } => previous,
+        _ => None,
+    }
+}
+
+async fn start_review_task(app: &AppHandle, root: PathBuf, config: AiConfig) -> CmdResult<()> {
+    let current = review_state_for(app, &root).await;
+    if matches!(current, ReviewState::Running { .. }) {
+        return Ok(());
+    }
+    let repo = Repo::new(&root);
+    let set = |state: ReviewState| {
+        app.state::<AppState>()
+            .reviews
+            .lock()
+            .unwrap()
+            .insert(root.clone(), state);
+        emit_review(app, &root);
+    };
+    let scope = match review::scope(&repo).await {
+        Ok(scope) => scope,
+        Err(e) => {
+            set(ReviewState::Failed {
+                provider: config.provider,
+                message: e.message.clone(),
+                previous: previous_review(current),
+            });
+            return Err(e);
+        }
+    };
+    set(ReviewState::Running {
+        provider: config.provider,
+        scope: scope.label.clone(),
+        files: scope.diffs.len(),
+        started_at: review::now_secs(),
+    });
+
+    let handle = app.clone();
+    let task_root = root.clone();
+    let previous = previous_review(current);
+    let task = tauri::async_runtime::spawn(async move {
+        let result = review::run(&config, &task_root, scope).await;
+        let state = match result {
+            Ok(review) => {
+                if let Ok(dir) = Repo::new(&task_root).git_dir().await {
+                    review::save(&dir, &review);
+                }
+                ReviewState::Done { review }
+            }
+            Err(e) => ReviewState::Failed {
+                provider: config.provider,
+                message: e.message,
+                previous,
+            },
+        };
+        let app_state = handle.state::<AppState>();
+        app_state
+            .reviews
+            .lock()
+            .unwrap()
+            .insert(task_root.clone(), state);
+        app_state.review_tasks.lock().unwrap().remove(&task_root);
+        emit_review(&handle, &task_root);
+    });
+    app.state::<AppState>()
+        .review_tasks
+        .lock()
+        .unwrap()
+        .insert(root, task);
+    Ok(())
+}
+
+// MARK: Commands — AI
+
+#[tauri::command]
+async fn ai_providers() -> Vec<ProviderStatus> {
+    ai::statuses().await
+}
+
+#[tauri::command]
+fn ai_config(prefs: State<'_, PrefsStore>) -> AiConfig {
+    prefs.ai()
+}
+
+#[tauri::command]
+fn set_ai_config(app: AppHandle, prefs: State<'_, PrefsStore>, config: AiConfig) {
+    prefs.set_ai(config);
+    let _ = app.emit("ai-config-changed", ());
+    tray::refresh(&app);
+}
+
+#[tauri::command]
+fn set_ai_key(provider: Provider, key: String) -> CmdResult<()> {
+    ai::set_key(provider, &key)
+}
+
+#[tauri::command]
+fn clear_ai_key(provider: Provider) -> CmdResult<()> {
+    ai::clear_key(provider)
+}
+
+#[tauri::command]
+async fn test_ai(prefs: State<'_, PrefsStore>) -> CmdResult<TestResult> {
+    let config = prefs.ai();
+    ai::test(&config).await
+}
+
+#[tauri::command]
+async fn review_state(app: AppHandle, root: String) -> ReviewState {
+    review_state_for(&app, Path::new(&root)).await
+}
+
+/// Reviews with the configured AI; `provider` overrides which one for this run only.
+#[tauri::command]
+async fn start_review(app: AppHandle, root: String, provider: Option<Provider>) -> CmdResult<()> {
+    let mut config = app.state::<PrefsStore>().ai();
+    if let Some(provider) = provider {
+        if provider != config.provider {
+            config.provider = provider;
+            config.model.clear();
+        }
+    }
+    start_review_task(&app, PathBuf::from(root), config).await
+}
+
+#[tauri::command]
+async fn cancel_review(app: AppHandle, root: String) {
+    let root = PathBuf::from(root);
+    // Dropping the task kills the agent process (kill_on_drop).
+    if let Some(task) = app
+        .state::<AppState>()
+        .review_tasks
+        .lock()
+        .unwrap()
+        .remove(&root)
+    {
+        task.abort();
+    }
+    let state = app.state::<AppState>();
+    let mut reviews = state.reviews.lock().unwrap();
+    if matches!(reviews.get(&root), Some(ReviewState::Running { .. })) {
+        reviews.remove(&root);
+    }
+    drop(reviews);
+    emit_review(&app, &root);
+}
+
+// MARK: Commands — recent repositories
+
+#[tauri::command]
+fn recent_repositories(prefs: State<'_, PrefsStore>) -> Vec<String> {
+    prefs
+        .recents()
+        .into_iter()
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect()
+}
+
+#[tauri::command]
+fn remove_recent_repository(app: AppHandle, prefs: State<'_, PrefsStore>, path: String) {
+    prefs.remove_recent(&path);
+    tray::refresh(&app);
+}
+
+#[tauri::command]
+fn import_recent_repositories(app: AppHandle, prefs: State<'_, PrefsStore>, paths: Vec<String>) {
+    prefs.import_recents(paths);
+    tray::refresh(&app);
+}
+
 // MARK: Watching
 
 #[derive(Clone, Serialize)]
@@ -555,7 +836,9 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &PredefinedMenuItem::hide_others(app, None)?,
             &PredefinedMenuItem::show_all(app, None)?,
             &PredefinedMenuItem::separator(app)?,
-            &PredefinedMenuItem::quit(app, None)?,
+            // Our own Quit: closing the last window keeps Seam in the menu bar, so ⌘Q has to
+            // exit explicitly instead of going through the "all windows closed" path.
+            &item("quit", "Quit Seam", Some("CmdOrCtrl+Q"))?,
         ],
     )?;
     let file = Submenu::with_items(
@@ -591,6 +874,8 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         &[
             &item("view-changes", "Changes", Some("CmdOrCtrl+1"))?,
             &item("view-history", "History", Some("CmdOrCtrl+2"))?,
+            &item("view-review", "Review", Some("CmdOrCtrl+3"))?,
+            &item("expand-diff", "Expand Diff", Some("CmdOrCtrl+Shift+E"))?,
             &PredefinedMenuItem::separator(app)?,
             &item("toggle-left", "Toggle Sidebar", Some("CmdOrCtrl+B"))?,
             &item("toggle-right", "Toggle Commit Panel", Some("CmdOrCtrl+L"))?,
@@ -614,6 +899,11 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &item("push", "Push", Some("CmdOrCtrl+P"))?,
             &PredefinedMenuItem::separator(app)?,
             &item("new-branch", "New Branch…", Some("CmdOrCtrl+Shift+N"))?,
+            &item(
+                "review-branch",
+                "Review Branch with AI",
+                Some("CmdOrCtrl+Shift+R"),
+            )?,
             &item("uncommit", "Undo Last Commit", None)?,
             &PredefinedMenuItem::separator(app)?,
             &item("reveal", "Show in Finder", None)?,
@@ -634,6 +924,11 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
 fn on_menu(app: &AppHandle, id: &str) {
     match id {
         "open" => pick_and_open(app),
+        // A repository window shows settings as a sheet over itself; anywhere else gets the window.
+        "settings" if !focused_window(app).is_some_and(|w| w.label().starts_with("repo-")) => {
+            let _ = show_settings(app, None);
+        }
+        "quit" => app.exit(0),
         "welcome" => {
             let _ = show_welcome(app);
         }
@@ -682,14 +977,45 @@ pub fn run() {
             redo,
             undo_titles,
             watch,
+            open_settings_window,
+            ai_providers,
+            ai_config,
+            set_ai_config,
+            set_ai_key,
+            clear_ai_key,
+            test_ai,
+            review_state,
+            start_review,
+            cancel_review,
+            recent_repositories,
+            remove_recent_repository,
+            import_recent_repositories,
         ])
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::Destroyed => {
                 let state = window.state::<AppState>();
                 state.watchers.lock().unwrap().remove(window.label());
+                state.window_roots.lock().unwrap().remove(window.label());
             }
+            tauri::WindowEvent::Focused(true) => {
+                let state = window.state::<AppState>();
+                let root = state
+                    .window_roots
+                    .lock()
+                    .unwrap()
+                    .get(window.label())
+                    .cloned();
+                if root.is_some() {
+                    *state.last_repo.lock().unwrap() = root;
+                    tray::refresh(window.app_handle());
+                }
+            }
+            _ => {}
         })
         .setup(|app| {
+            let prefs_dir = app.path().app_data_dir()?;
+            app.manage(PrefsStore::load(&prefs_dir));
+            tray::create(app.handle())?;
             // `seam /path/to/repo` from a terminal.
             let paths: Vec<PathBuf> = std::env::args()
                 .skip(1)
@@ -703,7 +1029,7 @@ pub fn run() {
             } else {
                 tauri::async_runtime::spawn(async move {
                     for p in paths {
-                        if open_repo_window(&handle, &p).await.is_err() {
+                        if open_repo_window(&handle, &p, None).await.is_err() {
                             let _ = show_welcome(&handle);
                         }
                     }
@@ -715,6 +1041,10 @@ pub fn run() {
         .expect("error while building Seam");
 
     app.run(|app, event| match event {
+        // Closing the last window keeps Seam in the menu bar; Quit passes an exit code.
+        RunEvent::ExitRequested {
+            code: None, api, ..
+        } => api.prevent_exit(),
         // Folders dropped on the Dock icon or opened with `open -a Seam <dir>`.
         #[cfg(target_os = "macos")]
         RunEvent::Opened { urls } => {
@@ -722,7 +1052,7 @@ pub fn run() {
                 if let Ok(path) = url.to_file_path() {
                     let handle = app.clone();
                     tauri::async_runtime::spawn(async move {
-                        if let Err(e) = open_repo_window(&handle, &path).await {
+                        if let Err(e) = open_repo_window(&handle, &path, None).await {
                             handle
                                 .dialog()
                                 .message(e.message)
