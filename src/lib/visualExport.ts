@@ -178,7 +178,11 @@ async function toHtml(visual: Visual): Promise<string> {
 <meta name="generator" content="Seam">
 <title>${escapeHtml(visual.title)}</title>
 <style>${css}</style>
-<style>html, body { margin: 0; background: var(--app); color: var(--fg); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; } .vz-prose, .selectable { user-select: text; }</style>
+<style>
+/* The app's own sheet fixes html and body to the window and turns off scrolling and selection; a page needs both back. */
+html, body { height: auto; margin: 0; overflow: auto; background: var(--app); color: var(--fg); font-family: 'IBM Plex Sans', system-ui, sans-serif; font-size: 13px; }
+body { -webkit-user-select: text; user-select: text; cursor: auto; }
+</style>
 </head>
 <body>
 ${body}
