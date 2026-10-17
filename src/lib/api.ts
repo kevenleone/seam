@@ -19,8 +19,8 @@ import type {
     Stash,
     TestResult,
     VisualKind,
-    VisualPlanSummary,
     VisualState,
+    VisualSummary,
 } from './types';
 
 /** Typed wrappers around the Rust commands in src-tauri/src/lib.rs. */
@@ -53,7 +53,8 @@ export const api = {
     openFolderDialog: () => invoke<void>('open_folder_dialog'),
     openRepository: (path: string) => invoke<void>('open_repository', { path }),
     openSettingsWindow: (pane: null | string) => invoke<void>('open_settings_window', { pane }),
-    openVisualPlan: (root: string, id: string) => invoke<void>('open_visual_plan', { id, root }),
+    openVisual: (root: string, kind: VisualKind, id: string) =>
+        invoke<void>('open_visual', { id, kind, root }),
     openWelcome: () => invoke<void>('open_welcome'),
     perform: (root: string, op: Op) => invoke<Outcome>('perform', { op, root }),
     playSound: (sound: string) => invoke<void>('play_sound', { sound }),
@@ -85,7 +86,8 @@ export const api = {
     testAi: () => invoke<TestResult>('test_ai'),
     topLevel: (path: string) => invoke<null | string>('top_level', { path }),
     undo: (root: string) => invoke<null | Outcome>('undo', { root }),
-    visualPlans: (root: string) => invoke<VisualPlanSummary[]>('visual_plans', { root }),
+    visualHistory: (root: string, kind: VisualKind) =>
+        invoke<VisualSummary[]>('visual_history', { kind, root }),
     visualScope: (root: string) => invoke<ScopeSummary>('visual_scope', { root }),
     visualState: (root: string, kind: VisualKind) =>
         invoke<VisualState>('visual_state', { kind, root }),

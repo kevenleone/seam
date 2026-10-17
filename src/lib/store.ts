@@ -15,8 +15,8 @@ import type {
     ReviewState,
     Stash,
     VisualKind,
-    VisualPlanSummary,
     VisualState,
+    VisualSummary,
 } from './types';
 
 import { api, errorMessage } from './api';
@@ -81,7 +81,8 @@ interface Actions {
     loadVisuals(): Promise<void>;
     /** A toast with no undo. */
     notify(message: string): void;
-    openPlan(id: string): void;
+    /** Shows a saved recap or plan, from any branch, until the branch changes. */
+    openVisual(kind: VisualKind, id: string): void;
     perform(op: Op, label: string): void;
     pull(): void;
     push(force?: boolean): void;
@@ -131,9 +132,10 @@ interface State {
     palette: boolean;
 
     plan: VisualState;
-    plans: VisualPlanSummary[];
+    plans: VisualSummary[];
     progress: null | string;
     recap: VisualState;
+    recaps: VisualSummary[];
     review: ReviewState;
     reviewFocus: null | ReviewFocus;
     root: string;
@@ -367,13 +369,14 @@ export const useRepo = create<RepoStore>()((set, get) => {
             const root = get().root;
 
             try {
-                const [recap, plan, plans] = await Promise.all([
+                const [recap, plan, recaps, plans] = await Promise.all([
                     api.visualState(root, 'recap'),
                     api.visualState(root, 'plan'),
-                    api.visualPlans(root),
+                    api.visualHistory(root, 'recap'),
+                    api.visualHistory(root, 'plan'),
                 ]);
 
-                set({ plan, plans, recap });
+                set({ plan, plans, recap, recaps });
             } catch (error) {
                 set({ error: errorMessage(error) });
             }
@@ -382,9 +385,9 @@ export const useRepo = create<RepoStore>()((set, get) => {
         notify(message) {
             showToast(message, false);
         },
-        openPlan(id) {
-            set({ tab: 'visual', visualKind: 'plan' });
-            api.openVisualPlan(get().root, id).catch((error) =>
+        openVisual(kind, id) {
+            set({ tab: 'visual', visualKind: kind });
+            api.openVisual(get().root, kind, id).catch((error) =>
                 set({ error: errorMessage(error) }),
             );
         },
@@ -407,8 +410,9 @@ export const useRepo = create<RepoStore>()((set, get) => {
         push(force = false) {
             get().perform({ force, type: 'push' }, force ? 'Force pushing' : 'Pushing');
         },
-
         recap: { status: 'idle' },
+
+        recaps: [],
 
         redo() {
             enqueue('Redoing', () => api.redo(get().root));
