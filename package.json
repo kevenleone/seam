@@ -42,7 +42,7 @@
     "private": true,
     "scripts": {
         "app:build": "tauri build",
-        "app:dev": "tauri dev",
+        "app:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
         "build": "tsc --noEmit && vite build",
         "dev": "vite",
         "format": "prettier --write .",
