@@ -12,7 +12,7 @@ import { api } from '../lib/api';
 import { getSettings, syncRecents, type Theme, updateSettings, useSettings } from '../lib/settings';
 import { useSettingsModal } from '../lib/settingsModal';
 import { branchLabel, changeCount, repoName, type Tab, useRepo } from '../lib/store';
-import { useAppVersion } from '../lib/version';
+import { useAppName, useAppVersion } from '../lib/version';
 import { ChangesView } from './ChangesView';
 import { HistoryView } from './HistoryView';
 import { ReviewView } from './ReviewView';
@@ -469,6 +469,7 @@ function ReviewBadge() {
 }
 
 function StatusBar() {
+    const name = useAppName();
     const version = useAppVersion();
     const { busy, progress, root, status } = useRepo();
     const { theme } = useSettings();
@@ -516,7 +517,9 @@ function StatusBar() {
                     </button>
                 ))}
             </div>
-            <span className="text-dim">Seam {version}</span>
+            <span className="text-dim">
+                {name} {version}
+            </span>
         </footer>
     );
 }

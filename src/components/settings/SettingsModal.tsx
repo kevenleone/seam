@@ -5,7 +5,7 @@ import type { SettingsPane } from '../../lib/settingsModal';
 
 import { restoreDefaults } from '../../lib/settings';
 import { useSettingsModal } from '../../lib/settingsModal';
-import { useAppVersion } from '../../lib/version';
+import { useAppName, useAppVersion } from '../../lib/version';
 import { Icon, type IconName, SeamMark } from '../Icon';
 import { AboutPane, AiPane, AppearancePane, GeneralPane, ShortcutsPane } from './panes';
 
@@ -64,6 +64,7 @@ export function SettingsModal({ standalone }: { standalone?: boolean }) {
     const close = standalone ? () => void getCurrentWindow().close() : modal.close;
     const [filter, setFilter] = useState('');
     const sheet = useRef<HTMLDivElement>(null);
+    const name = useAppName();
     const version = useAppVersion();
 
     useEffect(() => {
@@ -172,7 +173,7 @@ export function SettingsModal({ standalone }: { standalone?: boolean }) {
                             Restore defaults
                         </button>
                         <span className="flex items-center gap-2 text-[12px] text-dim">
-                            <SeamMark size={13} /> Seam {version}
+                            <SeamMark size={13} /> {name} {version}
                         </span>
                     </div>
                 </nav>
