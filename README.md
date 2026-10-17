@@ -18,6 +18,10 @@ lines, commit, stash, rename or remove commits, and undo any of it with ⌘Z.
 - **Settings** (⌘,): 18 themes with separate light and dark picks, accents, AI provider and review
   style. Expand any diff to fill the window with ⇧⌘E.
 
+- **Terminal**: `seam .` opens the repository you are in. Install the command from **Settings ›
+  General › Terminal** or **Seam › Install 'seam' Command in PATH**; it links `/usr/local/bin/seam`
+  to a script inside the app, and macOS asks for your password where that folder is not writable.
+
 Everything runs natively: Rust shells out to your git and to the agents' CLIs, and calls the
 provider APIs directly. Keys stay in the macOS Keychain.
 
