@@ -1,16 +1,24 @@
-// Runs before the app bundle so the first paint already uses the saved theme.
+// Runs before the app bundle: repaints the last theme so the first frame is already right.
 (function () {
-    var theme;
+    var paint;
 
     try {
-        theme = JSON.parse(localStorage.getItem('seam.settings') || '{}').theme;
+        paint = JSON.parse(localStorage.getItem('seam.paint') || 'null');
     } catch {
-        theme = undefined;
+        paint = null;
     }
 
-    var dark =
-        theme !== 'light' &&
-        (theme !== 'auto' || matchMedia('(prefers-color-scheme: dark)').matches);
+    var root = document.documentElement;
 
-    document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    if (!paint || !paint.tokens) {
+        root.dataset.theme = 'dark';
+
+        return;
+    }
+
+    root.dataset.theme = paint.mode;
+    root.style.colorScheme = paint.mode;
+    Object.keys(paint.tokens).forEach(function (name) {
+        root.style.setProperty(name, paint.tokens[name]);
+    });
 })();

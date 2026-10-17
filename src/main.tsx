@@ -5,6 +5,7 @@ import { createRoot } from 'react-dom/client';
 import { api } from './lib/api';
 import { applyTheme, getSettings } from './lib/settings';
 import { RepoWindow } from './views/RepoWindow';
+import { SettingsWindow } from './views/SettingsWindow';
 import { Welcome } from './views/Welcome';
 import './styles.css';
 
@@ -25,7 +26,15 @@ document.addEventListener('contextmenu', (event) => {
 });
 
 createRoot(document.getElementById('root')!).render(
-    <StrictMode>{repo ? <RepoWindow root={repo} /> : <Welcome />}</StrictMode>,
+    <StrictMode>
+        {repo ? (
+            <RepoWindow root={repo} />
+        ) : params.get('view') === 'settings' ? (
+            <SettingsWindow />
+        ) : (
+            <Welcome />
+        )}
+    </StrictMode>,
 );
 
 // The window was created hidden. Show it once React's first frame is on screen

@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { Icon, SeamMark } from '../components/Icon';
 import { Button, Modal, TextField } from '../components/ui';
 import { api, errorMessage } from '../lib/api';
-import { recentRepositories, removeRecent } from '../lib/settings';
+import { recentRepositories, removeRecent, syncRecents } from '../lib/settings';
 import { useAppVersion } from '../lib/version';
 
 const home = (path: string) => path.replace(/^\/Users\/[^/]+/, '~');
@@ -20,10 +20,12 @@ export function Welcome() {
     const [dropping, setDropping] = useState(false);
 
     useEffect(() => {
+        void syncRecents().then(setRecents);
+
         const win = getCurrentWebviewWindow();
         const offs = [
             win.listen<string>('menu', (event) => event.payload === 'clone' && setCloning(true)),
-            listen('recent-opened', () => setRecents(recentRepositories())),
+            listen('recent-opened', () => void syncRecents().then(setRecents)),
             // Folders dropped on the window.
             win.onDragDropEvent((event) => {
                 if (event.payload.type === 'over' || event.payload.type === 'enter') {
@@ -104,6 +106,15 @@ export function Welcome() {
                         </li>
                     ))}
                 </ul>
+                <span className="flex-1" />
+                <button
+                    className="flex items-center gap-1.5 self-start text-[12px] text-muted hover:text-fg"
+                    onClick={() => void api.openSettingsWindow(null)}
+                    type="button"
+                >
+                    <Icon name="gear" size={12} /> Settings
+                    <span className="font-mono text-[11px] text-dim">⌘,</span>
+                </button>
             </div>
             <div
                 className={`flex min-w-0 flex-1 flex-col gap-2.5 overflow-hidden border-l border-line p-6 pt-12 ${dropping ? 'bg-accent-bg' : 'bg-panel'}`}
@@ -153,8 +164,7 @@ export function Welcome() {
                                     aria-label="Remove from list"
                                     className="hidden px-2 text-muted group-hover:block hover:text-fg"
                                     onClick={() => {
-                                        removeRecent(path);
-                                        setRecents(recentRepositories());
+                                        void removeRecent(path).then(setRecents);
                                     }}
                                     title="Remove from list"
                                     type="button"
