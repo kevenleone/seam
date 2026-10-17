@@ -736,7 +736,7 @@ const SHORTCUTS: { group: string; rows: [string, string][] }[] = [
     {
         group: 'Views',
         rows: [
-            ['⌘1 · ⌘2 · ⌘3', 'Changes · History · Review'],
+            ['⌘1 · ⌘2 · ⌘3 · ⌘4', 'Changes · History · Review · Visual'],
             ['⌘B', 'Show or hide the sidebar'],
             ['⌘L', 'Show or hide the commit panel'],
             ['⇧⌘E', 'Expand the diff (esc to come back)'],
@@ -751,6 +751,7 @@ const SHORTCUTS: { group: string; rows: [string, string][] }[] = [
             ['⇧⌘F · ⇧⌘P · ⌘P', 'Fetch · Pull · Push'],
             ['⇧⌘N', 'New branch'],
             ['⇧⌘R', 'Review the branch with AI'],
+            ['⇧⌘V', 'Draw a visual recap of the branch'],
         ],
     },
     {

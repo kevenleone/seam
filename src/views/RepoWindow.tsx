@@ -1,7 +1,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 
 import { Icon } from '../components/Icon';
 import { Palette } from '../components/Palette';
@@ -16,6 +16,11 @@ import { useAppVersion } from '../lib/version';
 import { ChangesView } from './ChangesView';
 import { HistoryView } from './HistoryView';
 import { ReviewView } from './ReviewView';
+
+// Its diagrams, markdown and sanitiser load the first time the tab opens.
+const VisualView = lazy(() =>
+    import('./VisualView').then((module) => ({ default: module.VisualView })),
+);
 
 export function RepoWindow({ root }: { root: string }) {
     const tab = useRepo((state) => state.tab);
@@ -61,6 +66,11 @@ export function RepoWindow({ root }: { root: string }) {
             listen<string>('review-updated', (event) => {
                 if (event.payload === root) {
                     void useRepo.getState().loadReview();
+                }
+            }),
+            listen<string>('visual-updated', (event) => {
+                if (event.payload === root) {
+                    void useRepo.getState().loadVisuals();
                 }
             }),
             listen('tauri://focus', () => void useRepo.getState().refreshStatus()),
@@ -130,8 +140,12 @@ export function RepoWindow({ root }: { root: string }) {
                     <ChangesView />
                 ) : tab === 'history' ? (
                     <HistoryView />
-                ) : (
+                ) : tab === 'review' ? (
                     <ReviewView />
+                ) : (
+                    <Suspense fallback={null}>
+                        <VisualView />
+                    </Suspense>
                 )}
             </main>
             {statusBar && !expanded && <StatusBar />}
@@ -295,7 +309,7 @@ function Header() {
                 aria-label="Views"
                 className="flex gap-0.5 rounded-[7px] border border-control-line bg-control p-0.5"
             >
-                {(['changes', 'history', 'review'] as const).map((option) => (
+                {(['changes', 'history', 'review', 'visual'] as const).map((option) => (
                     <button
                         aria-current={s.tab === option ? 'page' : undefined}
                         className={`rounded-[5px] px-2.5 py-1 ${s.tab === option ? 'bg-tab text-fg' : 'text-muted hover:text-fg'}`}
@@ -303,11 +317,19 @@ function Header() {
                         onClick={() => s.set({ tab: option })}
                         type="button"
                     >
-                        {{ changes: 'Changes', history: 'History', review: 'Review' }[option]}
+                        {
+                            {
+                                changes: 'Changes',
+                                history: 'History',
+                                review: 'Review',
+                                visual: 'Visual',
+                            }[option]
+                        }
                         {option === 'changes' && count > 0 && (
                             <span className="ml-1.5 text-accent">{count}</span>
                         )}
                         {option === 'review' && <ReviewBadge />}
+                        {option === 'visual' && <VisualBadge />}
                     </button>
                 ))}
             </nav>
@@ -364,10 +386,14 @@ function onMenu(id: string) {
             return s.set({ sheet: { from: null, kind: 'newBranch' } });
         case 'palette':
             return s.set({ palette: true });
+        case 'plan-change':
+            return s.set({ tab: 'visual', visualKind: 'plan' });
         case 'pull':
             return s.pull();
         case 'push':
             return s.push();
+        case 'recap-branch':
+            return s.startVisual('recap');
         case 'reveal':
             return void revealItemInDir(s.root);
         case 'review-branch':
@@ -392,6 +418,8 @@ function onMenu(id: string) {
             return s.set({ tab: 'history' });
         case 'view-review':
             return s.set({ tab: 'review' });
+        case 'view-visual':
+            return s.set({ tab: 'visual' });
     }
 }
 
@@ -520,4 +548,18 @@ function ToastView() {
             )}
         </div>
     );
+}
+
+/** A pulsing dot while a recap or a plan is being drawn. */
+function VisualBadge() {
+    const running = useRepo(
+        (state) => state.recap.status === 'running' || state.plan.status === 'running',
+    );
+
+    return running ? (
+        <span
+            aria-label="Visual running"
+            className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent align-[2px]"
+        />
+    ) : null;
 }

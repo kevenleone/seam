@@ -253,3 +253,183 @@ export interface TestResult {
     durationMs: number;
     reply: string;
 }
+
+export interface Visual {
+    blocks: VisualBlock[];
+    brief: string;
+    canvas: VisualCanvas;
+    commits: number;
+    createdAt: number;
+    diffs: FileDiff[];
+    durationMs: number;
+    headSha: null | string;
+    id: string;
+    kind: VisualKind;
+    prompt: null | string;
+    provider: Provider;
+    scope: string;
+    title: string;
+    truncated: boolean;
+}
+
+export interface VisualAnnotation {
+    line: null | number;
+    note: string;
+    side: string;
+}
+
+export type VisualBlock =
+    | ({ type: 'code' } & VisualCode)
+    | ({ type: 'compare' } & VisualCompare)
+    | ({ type: 'contract' } & VisualContract)
+    | ({ type: 'decision' } & VisualDecision)
+    | ({ type: 'diagram' } & VisualDiagram)
+    | ({ type: 'diff' } & VisualDiff)
+    | ({ type: 'fileTree' } & VisualFileTree)
+    | ({ type: 'questions' } & VisualQuestions)
+    | ({ type: 'text' } & VisualText)
+    | ({ type: 'verify' } & VisualVerify);
+
+export interface VisualCanvas {
+    connectors: { from: string; label: null | string; to: string }[];
+    pins: VisualPin[];
+    screens: VisualScreen[];
+}
+
+/** `added`, `modified`, `removed`, `renamed`, or empty for unchanged. */
+export type VisualChange = '' | 'added' | 'modified' | 'removed' | 'renamed';
+
+export interface VisualCode {
+    annotations: VisualAnnotation[];
+    code: string;
+    file: string;
+    language: string;
+    summary: string;
+}
+
+export interface VisualCompare {
+    after: VisualSide;
+    before: VisualSide;
+    title: string;
+}
+
+export interface VisualContract {
+    endpoints: {
+        change: VisualChange;
+        method: string;
+        path: string;
+        request: null | string;
+        response: null | string;
+        summary: string;
+    }[];
+    entities: {
+        change: VisualChange;
+        fields: { change: VisualChange; name: string; type: string; was: null | string }[];
+        name: string;
+    }[];
+    title: string;
+}
+
+export interface VisualDecision {
+    alternatives: { option: string; whyNot: string }[];
+    consequences: string;
+    context: string;
+    decision: string;
+    title: string;
+}
+
+export interface VisualDiagram {
+    direction: string;
+    edges: { change: VisualChange; from: string; label: null | string; to: string }[];
+    nodes: VisualNode[];
+    title: string;
+}
+
+export interface VisualDiff {
+    annotations: VisualAnnotation[];
+    file: string;
+    summary: string;
+}
+
+export interface VisualFileTree {
+    files: {
+        additions: number;
+        change: VisualChange;
+        deletions: number;
+        note: null | string;
+        path: string;
+    }[];
+}
+
+export type VisualKind = 'plan' | 'recap';
+
+export interface VisualNode {
+    change: VisualChange;
+    detail: null | string;
+    group: null | string;
+    id: string;
+    kind: string;
+    label: string;
+}
+
+export interface VisualPin {
+    body: string;
+    number: number;
+    screen: string;
+    target: string;
+    title: string;
+}
+
+export interface VisualPlanSummary {
+    createdAt: number;
+    id: string;
+    prompt: string;
+    title: string;
+}
+
+export interface VisualQuestions {
+    items: { question: string; recommendation: string }[];
+}
+
+export interface VisualScreen {
+    html: string;
+    id: string;
+    note: null | string;
+    state: 'after' | 'before' | 'proposed' | null;
+    surface: string;
+    title: string;
+}
+
+export interface VisualSide {
+    code: null | string;
+    language: null | string;
+    screen: null | string;
+    text: null | string;
+}
+
+export type VisualState =
+    | {
+          kind: VisualKind;
+          message: string;
+          previous: null | Visual;
+          provider: Provider;
+          status: 'failed';
+      }
+    | {
+          kind: VisualKind;
+          prompt: null | string;
+          provider: Provider;
+          scope: string;
+          startedAt: number;
+          status: 'running';
+      }
+    | { status: 'done'; visual: Visual }
+    | { status: 'idle' };
+
+export interface VisualText {
+    markdown: string;
+}
+
+export interface VisualVerify {
+    steps: { expect: string; how: string; title: string }[];
+}

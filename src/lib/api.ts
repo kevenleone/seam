@@ -16,6 +16,9 @@ import type {
     Snapshot,
     Stash,
     TestResult,
+    VisualKind,
+    VisualPlanSummary,
+    VisualState,
 } from './types';
 
 /** Typed wrappers around the Rust commands in src-tauri/src/lib.rs. */
@@ -23,12 +26,16 @@ export const api = {
     aiConfig: () => invoke<AiConfig>('ai_config'),
     aiProviders: () => invoke<ProviderStatus[]>('ai_providers'),
     cancelReview: (root: string) => invoke<void>('cancel_review', { root }),
+    cancelVisual: (root: string, kind: VisualKind) => invoke<void>('cancel_visual', { kind, root }),
     clearAiKey: (provider: Provider) => invoke<void>('clear_ai_key', { provider }),
     cliStatus: () => invoke<CliStatus>('cli_status'),
     cloneRepository: (url: string, destination: string) =>
         invoke<void>('clone_repository', { destination, url }),
     commitDetail: (root: string, sha: string, ignoreWhitespace: boolean) =>
         invoke<Detail>('commit_detail', { ignoreWhitespace, root, sha }),
+    /** Resolves `false` when the save panel was dismissed. */
+    exportVisual: (name: string, extension: string, contents: string) =>
+        invoke<boolean>('export_visual', { contents, extension, name }),
     fileDiff: (root: string, path: string, source: DiffSource, ignoreWhitespace: boolean) =>
         invoke<FileDiff | null>('file_diff', { ignoreWhitespace, path, root, source }),
     gitVersion: () => invoke<string>('git_version'),
@@ -43,8 +50,10 @@ export const api = {
     openFolderDialog: () => invoke<void>('open_folder_dialog'),
     openRepository: (path: string) => invoke<void>('open_repository', { path }),
     openSettingsWindow: (pane: null | string) => invoke<void>('open_settings_window', { pane }),
+    openVisualPlan: (root: string, id: string) => invoke<void>('open_visual_plan', { id, root }),
     openWelcome: () => invoke<void>('open_welcome'),
     perform: (root: string, op: Op) => invoke<Outcome>('perform', { op, root }),
+    printWindow: () => invoke<void>('print_window'),
     rangeDetail: (root: string, oldest: string, newest: string) =>
         invoke<Detail>('range_detail', { newest, oldest, root }),
     recentRepositories: () => invoke<string[]>('recent_repositories'),
@@ -59,11 +68,20 @@ export const api = {
     snapshot: (root: string) => invoke<Snapshot>('snapshot', { root }),
     startReview: (root: string, provider: null | Provider) =>
         invoke<void>('start_review', { provider, root }),
+    startVisual: (
+        root: string,
+        kind: VisualKind,
+        prompt: null | string,
+        provider: null | Provider,
+    ) => invoke<void>('start_visual', { kind, prompt, provider, root }),
     stashDetail: (root: string, stash: Stash) => invoke<Detail>('stash_detail', { root, stash }),
 
     testAi: () => invoke<TestResult>('test_ai'),
     topLevel: (path: string) => invoke<null | string>('top_level', { path }),
     undo: (root: string) => invoke<null | Outcome>('undo', { root }),
+    visualPlans: (root: string) => invoke<VisualPlanSummary[]>('visual_plans', { root }),
+    visualState: (root: string, kind: VisualKind) =>
+        invoke<VisualState>('visual_state', { kind, root }),
     watch: (root: string) => invoke<void>('watch', { root }),
 };
 

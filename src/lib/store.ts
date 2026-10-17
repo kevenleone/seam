@@ -14,6 +14,9 @@ import type {
     RepoStatus,
     ReviewState,
     Stash,
+    VisualKind,
+    VisualPlanSummary,
+    VisualState,
 } from './types';
 
 import { api, errorMessage } from './api';
@@ -43,7 +46,7 @@ export type Sheet =
     | { kind: 'squash'; shas: string[] }
     | { kind: 'stash'; paths: string[] };
 
-export type Tab = 'changes' | 'history' | 'review';
+export type Tab = 'changes' | 'history' | 'review' | 'visual';
 
 export interface Toast {
     id: number;
@@ -66,6 +69,7 @@ export type RepoStore = Actions & State;
 interface Actions {
     applyLines(action: LineAction, hunks?: number[]): void;
     cancelReview(): void;
+    cancelVisual(kind: VisualKind): void;
     commit(andPush?: boolean): void;
     dismissFinding(id: number): void;
     fetch(): void;
@@ -74,6 +78,10 @@ interface Actions {
     loadDiff(): Promise<void>;
     loadMore(): Promise<void>;
     loadReview(): Promise<void>;
+    loadVisuals(): Promise<void>;
+    /** A toast with no undo. */
+    notify(message: string): void;
+    openPlan(id: string): void;
     perform(op: Op, label: string): void;
     pull(): void;
     push(force?: boolean): void;
@@ -89,6 +97,8 @@ interface Actions {
     showDetail(detail: HistoryDetail | null): void;
     /** Starts an AI review of the current branch with `provider`, or the one chosen in Settings. */
     startReview(provider?: Provider): void;
+    /** Starts a visual recap of the branch, or a plan of the change `prompt` describes. */
+    startVisual(kind: VisualKind, prompt?: string, provider?: Provider): void;
     toggleLine(hunk: number, line: number, range: boolean): void;
     undo(): void;
     viewHistory(ref: string): void;
@@ -117,10 +127,13 @@ interface State {
     lastCommit: Commit | null;
     lineSelection: Record<number, number[]>;
     loaded: boolean;
-
     meta: HistoryMeta;
     palette: boolean;
+
+    plan: VisualState;
+    plans: VisualPlanSummary[];
     progress: null | string;
+    recap: VisualState;
     review: ReviewState;
     reviewFocus: null | ReviewFocus;
     root: string;
@@ -132,6 +145,7 @@ interface State {
     summary: string;
     tab: Tab;
     toast: null | Toast;
+    visualKind: VisualKind;
 }
 
 let queue: Promise<void> = Promise.resolve();
@@ -220,6 +234,9 @@ export const useRepo = create<RepoStore>()((set, get) => {
         cancelReview() {
             void api.cancelReview(get().root);
         },
+        cancelVisual(kind) {
+            void api.cancelVisual(get().root, kind);
+        },
         checked: [],
         commit(andPush = false) {
             const { amend, body, busy, status, summary } = get();
@@ -270,6 +287,7 @@ export const useRepo = create<RepoStore>()((set, get) => {
             set({ loaded: true });
             await get().refreshHistory();
             await get().loadReview();
+            await get().loadVisuals();
         },
 
         inProgress: null,
@@ -345,7 +363,31 @@ export const useRepo = create<RepoStore>()((set, get) => {
                 set({ error: errorMessage(error) });
             }
         },
+        async loadVisuals() {
+            const root = get().root;
+
+            try {
+                const [recap, plan, plans] = await Promise.all([
+                    api.visualState(root, 'recap'),
+                    api.visualState(root, 'plan'),
+                    api.visualPlans(root),
+                ]);
+
+                set({ plan, plans, recap });
+            } catch (error) {
+                set({ error: errorMessage(error) });
+            }
+        },
         meta: { branches: [], remotes: [], stashes: [], tags: [], unpushed: [] },
+        notify(message) {
+            showToast(message, false);
+        },
+        openPlan(id) {
+            set({ tab: 'visual', visualKind: 'plan' });
+            api.openVisualPlan(get().root, id).catch((error) =>
+                set({ error: errorMessage(error) }),
+            );
+        },
         palette: false,
         perform(op, label) {
             const local =
@@ -356,6 +398,8 @@ export const useRepo = create<RepoStore>()((set, get) => {
 
             enqueue(label, () => api.perform(get().root, op), !local);
         },
+        plan: { status: 'idle' },
+        plans: [],
         progress: null,
         pull() {
             get().perform({ mode: getSettings().pullMode, type: 'pull' }, 'Pulling');
@@ -363,6 +407,9 @@ export const useRepo = create<RepoStore>()((set, get) => {
         push(force = false) {
             get().perform({ force, type: 'push' }, force ? 'Force pushing' : 'Pushing');
         },
+
+        recap: { status: 'idle' },
+
         redo() {
             enqueue('Redoing', () => api.redo(get().root));
         },
@@ -401,7 +448,6 @@ export const useRepo = create<RepoStore>()((set, get) => {
                 set({ error: errorMessage(e) });
             }
         },
-
         async refreshStatus() {
             const { root } = get();
 
@@ -435,7 +481,6 @@ export const useRepo = create<RepoStore>()((set, get) => {
                 set({ error: errorMessage(e) });
             }
         },
-
         review: { status: 'idle' },
 
         reviewFocus: null,
@@ -541,13 +586,19 @@ export const useRepo = create<RepoStore>()((set, get) => {
             // A review that can't start is recorded as failed and shown in the Review tab.
             api.startReview(get().root, provider ?? null).catch(() => get().loadReview());
         },
+        startVisual(kind, prompt, provider) {
+            set({ tab: 'visual', visualKind: kind });
+            // One that can't start is recorded as failed and shown in the Visual tab.
+            api.startVisual(get().root, kind, prompt ?? null, provider ?? null).catch(() =>
+                get().loadVisuals(),
+            );
+        },
 
         status: emptyStatus,
 
         summary: '',
 
         tab: 'changes',
-
         toast: null,
 
         toggleLine(hunkId, lineId, range) {
@@ -600,6 +651,8 @@ export const useRepo = create<RepoStore>()((set, get) => {
             set({ checked: [], detail: null, historyRef: ref, tab: 'history' });
             void get().refreshHistory();
         },
+
+        visualKind: 'recap',
     };
 
     async function findBase() {
