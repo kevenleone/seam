@@ -270,6 +270,8 @@ export interface TestResult {
 
 export interface Visual {
     blocks: VisualBlock[];
+    /** The branch it was drawn on. */
+    branch: null | string;
     brief: string;
     canvas: VisualCanvas;
     commits: number;
@@ -394,13 +396,6 @@ export interface VisualPin {
     title: string;
 }
 
-export interface VisualPlanSummary {
-    createdAt: number;
-    id: string;
-    prompt: string;
-    title: string;
-}
-
 export interface VisualQuestions {
     items: { question: string; recommendation: string }[];
 }
@@ -442,6 +437,16 @@ export type VisualState =
       }
     | { status: 'done'; visual: Visual }
     | { status: 'idle' };
+
+/** One saved recap or plan, as its history lists it. */
+export interface VisualSummary {
+    branch: null | string;
+    createdAt: number;
+    id: string;
+    prompt: string;
+    scope: string;
+    title: string;
+}
 
 export interface VisualText {
     markdown: string;

@@ -6,6 +6,7 @@ import type { Visual, VisualKind, VisualState } from '../lib/types';
 import { Icon } from '../components/Icon';
 import { ProviderSelect } from '../components/ProviderSelect';
 import { Button, relativeTime, TextArea } from '../components/ui';
+import { HistoryMenu } from '../components/visual/History';
 import { RecapEmpty, RunBar, RunStatus, WhileDrawing } from '../components/visual/States';
 import { VisualDocument } from '../components/visual/VisualDocument';
 import { PROVIDER_LABELS } from '../lib/ai';
@@ -34,7 +35,14 @@ export function VisualView() {
     const [composing, setComposing] = useState(false);
     const [printing, setPrinting] = useState<null | Visual>(null);
 
+    const head = useRepo((state) => state.status.branch.head);
+
     useEffect(() => setComposing(false), [kind, shown?.id]);
+
+    // Recaps belong to a branch: switching shows that branch's, or the empty state.
+    useEffect(() => {
+        void useRepo.getState().loadVisuals();
+    }, [head]);
 
     useEffect(() => {
         if (!printing) {
@@ -264,8 +272,10 @@ function VisualHeader({
     shown: null | Visual;
     state: VisualState;
 }) {
-    const { plans, set, startVisual, status } = useRepo();
+    const { set, startVisual, status } = useRepo();
     const running = state.status === 'running';
+    // A recap opened from the history of another branch, shown until the branch changes.
+    const elsewhere = kind === 'recap' && !!shown && shown.branch !== status.branch.head;
     const stale =
         kind === 'recap' &&
         shown?.headSha &&
@@ -300,32 +310,23 @@ function VisualHeader({
                     </span>
                 )
             )}
-            {stale && (
+            {elsewhere && (
+                <span className="rounded-full bg-control px-2 py-0.5 text-[11.5px] text-soft">
+                    From <span className="font-mono">{shown.branch ?? 'a detached HEAD'}</span>
+                </span>
+            )}
+            {stale && !elsewhere && (
                 <span className="rounded-full bg-warn-bg px-2 py-0.5 text-[11.5px] text-warn">
                     New commits since this recap
                 </span>
             )}
             <span className="flex-1" />
-            {kind === 'plan' && plans.length > 0 && (
-                <select
-                    aria-label="Earlier plans"
-                    className="h-[26px] max-w-[200px] rounded-md border border-control-line bg-control px-1.5 text-[12px] text-fg"
-                    disabled={running}
-                    onChange={(event) =>
-                        event.target.value && useRepo.getState().openPlan(event.target.value)
-                    }
-                    value={shown?.id ?? ''}
-                >
-                    <option disabled value="">
-                        Earlier plans
-                    </option>
-                    {plans.map((plan) => (
-                        <option key={plan.id} value={plan.id}>
-                            {plan.title}
-                        </option>
-                    ))}
-                </select>
-            )}
+            <HistoryMenu
+                branch={status.branch.head}
+                disabled={running}
+                kind={kind}
+                shownId={shown?.id ?? null}
+            />
             <ProviderSelect disabled={running} />
             <Button
                 aria-label="AI settings"
@@ -348,7 +349,7 @@ function VisualHeader({
                             title="Recap the branch again (⇧⌘V)"
                         >
                             <Icon name="refresh" size={12} />
-                            Redraw recap
+                            {elsewhere ? `Recap ${status.branch.head ?? 'HEAD'}` : 'Redraw recap'}
                         </Button>
                     )
                   : shown && (
