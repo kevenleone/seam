@@ -38,13 +38,18 @@ to work on it.
 
 | Command                      | What it does                                                                                  |
 | ---------------------------- | --------------------------------------------------------------------------------------------- |
-| `pnpm app:dev`               | Run the app with hot reload (Vite on port 1420 plus the Tauri window).                        |
+| `pnpm app:dev`               | Run the app with hot reload as **Seam Dev** (Vite on port 1420 plus the Tauri window).        |
 | `pnpm test`                  | `cargo test`: parser unit tests and integration tests against throwaway git repos.            |
 | `pnpm lint`                  | ESLint. It passes clean; keep it that way.                                                    |
 | `pnpm format`                | Prettier over everything. Required before committing.                                         |
 | `pnpm typecheck`             | Typecheck the renderer.                                                                       |
 | `cargo fmt` / `cargo clippy` | In `src-tauri/`. CI runs `cargo fmt --check` and `cargo clippy --all-targets -- -D warnings`. |
 | `pnpm app:build`             | Release `.app` and `.dmg` in `src-tauri/target/release/bundle/`.                              |
+
+`pnpm app:dev` merges `src-tauri/tauri.dev.conf.json` over the release config:
+its own name, identifier (`app.seam.desktop.dev`, so its own prefs and recents)
+and icons (`src-tauri/icons/dev/`), so it runs beside an installed Seam. Host
+strings take the name from `package_info()`, never a literal "Seam".
 
 `cargo test` and `cargo clippy` need `dist/` to exist (`tauri::generate_context!`
 embeds it), so run `pnpm build` once in a fresh checkout.
