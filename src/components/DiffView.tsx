@@ -232,6 +232,7 @@ export function DiffView({
         });
 
     // Rows are absolutely positioned, so give the content an explicit width for horizontal scrolling.
+    // Split view wraps long lines instead, so both sides stay in view.
     const contentWidth = splitDiff ? '100%' : `max(100%, calc(${maxChars + 4}ch + 110px))`;
 
     return (
@@ -449,7 +450,7 @@ const styles = {
     noNewline: { bg: '', gutter: '', num: 'text-dim', sign: '', signColor: 'text-dim' },
 };
 
-function Code({ height, line }: { height: number; line: DiffLine }) {
+function Code({ height, line, wrap }: { height: number; line: DiffLine; wrap?: boolean }) {
     const html = useContext(Highlighted)?.get(line);
 
     if (line.kind === 'noNewline') {
@@ -465,7 +466,7 @@ function Code({ height, line }: { height: number; line: DiffLine }) {
 
     return (
         <span
-            className="selectable pr-4 pl-1.5 whitespace-pre text-body"
+            className={`selectable pr-4 pl-1.5 text-body ${wrap ? 'min-w-0 break-all whitespace-pre-wrap' : 'whitespace-pre'}`}
             // highlight.js escapes the text it is given; the markup is only its own spans.
             dangerouslySetInnerHTML={html === undefined ? undefined : { __html: html }}
             style={{ lineHeight: `${height}px`, tabSize: 4 }}
@@ -485,7 +486,7 @@ function SplitLine({
     row: Extract<Row, { t: 'split' }>;
 }) {
     return (
-        <div className="grid grid-cols-2" style={{ height }}>
+        <div className="grid grid-cols-2" style={{ minHeight: height }}>
             <SplitSide
                 height={height}
                 hunk={row.hunk}
@@ -554,7 +555,7 @@ function SplitSide({
             >
                 {s.sign}
             </span>
-            <Code height={height} line={line} />
+            <Code height={height} line={line} wrap />
         </div>
     );
 }
