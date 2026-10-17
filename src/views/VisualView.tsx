@@ -3,11 +3,12 @@ import { createPortal } from 'react-dom';
 
 import type { Visual, VisualKind, VisualState } from '../lib/types';
 
+import { RunBar } from '../components/ChangeOverview';
 import { Icon } from '../components/Icon';
 import { ProviderSelect } from '../components/ProviderSelect';
 import { Button, relativeTime, TextArea } from '../components/ui';
 import { HistoryMenu } from '../components/visual/History';
-import { RecapEmpty, RunBar, RunStatus, WhileDrawing } from '../components/visual/States';
+import { RecapEmpty, RunStatus, WhileDrawing } from '../components/visual/States';
 import { VisualDocument } from '../components/visual/VisualDocument';
 import { PROVIDER_LABELS } from '../lib/ai';
 import { api, errorMessage } from '../lib/api';
