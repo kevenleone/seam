@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { Mode } from '../../lib/themes';
 import type {
     AiConfig,
+    CliStatus,
     Provider,
     ProviderStatus,
     ReviewFocusArea,
@@ -152,6 +153,68 @@ export function GeneralPane() {
                     Clear list
                 </Button>
             </Row>
+
+            <TerminalSection />
+        </>
+    );
+}
+
+function TerminalSection() {
+    const [status, setStatus] = useState<CliStatus | null>(null);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState<null | string>(null);
+
+    useEffect(() => {
+        void api.cliStatus().then(setStatus, () => setStatus(null));
+    }, []);
+
+    if (!status) {
+        return null;
+    }
+
+    const title = `Install '${status.name}' command in PATH`;
+
+    const toggle = async (): Promise<void> => {
+        if (busy) {
+            return;
+        }
+
+        setBusy(true);
+        setError(null);
+
+        try {
+            setStatus(await api.setCliInstalled(!status.installed));
+        } catch (reason) {
+            setError(errorMessage(reason));
+        } finally {
+            setBusy(false);
+        }
+    };
+
+    return (
+        <>
+            <SectionLabel>Terminal</SectionLabel>
+            <Row
+                desc={
+                    <>
+                        Run <span className="font-mono">{status.name} .</span> to open the
+                        repository you are in. Links /usr/local/bin/{status.name}; macOS may ask for
+                        your password.
+                    </>
+                }
+                last
+                title={title}
+            >
+                <Toggle label={title} on={status.installed} onChange={() => void toggle()} />
+            </Row>
+            {error && (
+                <div
+                    className="pb-3.5 text-[12.5px] leading-normal whitespace-pre-wrap text-warn select-text"
+                    role="alert"
+                >
+                    {error}
+                </div>
+            )}
         </>
     );
 }

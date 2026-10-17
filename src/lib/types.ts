@@ -38,6 +38,11 @@ export type ChangeKind =
     | 'typeChanged'
     | 'untracked';
 
+export interface CliStatus {
+    installed: boolean;
+    name: string;
+}
+
 export interface Commit {
     authorEmail: string;
     authorName: string;
