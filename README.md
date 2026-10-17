@@ -1,20 +1,32 @@
 # Seam
 
-A desktop git client — Tauri 2 + React + TypeScript + Tailwind — for everyday git: stage single
+A desktop git client for everyday git, built with Tauri 2, React, TypeScript and Tailwind. Stage single
 lines, commit, stash, rename or remove commits, and undo any of it with ⌘Z.
 
-- **Changes** — stage, unstage or discard single lines and hunks; commit or amend.
-- **History** — ⌘/⇧-click commits to squash, remove, cherry-pick or see their combined diff;
+![Seam's Changes view: a diff with four lines selected to unstage, and the commit message on the right](docs/images/changes.png)
+
+[Website](https://kevenleone.github.io/seam/) · [Download](https://github.com/kevenleone/seam/releases/latest)
+
+- **Changes**: stage, unstage or discard single lines and hunks; commit or amend.
+- **History**: ⌘/⇧-click commits to squash, remove, cherry-pick or see their combined diff;
   rename, revert or reset any commit; branches, stashes and tags.
-- **Review** — an AI review of the branch with comments on the lines they refer to, by the
+- **Review**: an AI review of the branch with comments on the lines they refer to, by the
   coding agent you already use (Claude Code, Codex, OpenCode) or a model provider under your
   own key (Anthropic, OpenAI, Google Gemini, or any OpenAI-compatible endpoint such as Ollama).
-- **Menu bar** — recent repositories and a one-click review, with Seam running in the background.
-- **Settings** (⌘,) — 18 themes with separate light and dark picks, accents, AI provider and review
+- **Menu bar**: recent repositories and a one-click review, with Seam running in the background.
+- **Settings** (⌘,): 18 themes with separate light and dark picks, accents, AI provider and review
   style. Expand any diff to fill the window with ⇧⌘E.
 
 Everything runs natively: Rust shells out to your git and to the agents' CLIs, and calls the
 provider APIs directly. Keys stay in the macOS Keychain.
+
+## Screenshots
+
+| History                                                                               | Review                                                                                          |
+| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| ![Three commits ticked in History, with their combined diff](docs/images/history.png) | ![An AI review with a comment under a changed line](docs/images/review.png)                     |
+| ![Settings, Appearance, with the theme gallery](docs/images/settings-appearance.png)  | ![Settings, AI: the model, its sign-in, and what reviews look for](docs/images/settings-ai.png) |
+| ![The Changes view in the light theme](docs/images/changes-light.png)                 | ![Seam in the Tokyo Night theme with a teal accent](docs/images/theme-tokyo-night.png)          |
 
 ## Develop
 
@@ -34,22 +46,22 @@ pnpm app:build               # → src-tauri/target/release/bundle/macos/Seam.ap
 cut by release-please from Conventional Commits and built as a universal macOS
 `.dmg`.
 
-Working on the code — architecture, conventions and commit rules — is described
+Working on the code (architecture, conventions and commit rules) is described
 in [AGENTS.md](AGENTS.md).
 
 ## Layout
 
-- `src-tauri/src/git/` — everything git, in Rust, by shelling out to your own `git` (so config,
+- `src-tauri/src/git/`: everything git, in Rust, by shelling out to your own `git` (so config,
   hooks, credential helpers and SSH behave as in Terminal; the login shell's environment is loaded
   once so hooks find node etc.).
-    - `parse.rs` — porcelain v2 status, unified diffs, log, refs, stashes, numstat.
-    - `patch.rs` — partial patches for staging, unstaging or discarding single lines.
-    - `rewrite.rs` — rename / remove / squash any commit through a scripted `rebase -i`.
-    - `repo.rs` — every operation, each returning an `Undoable`.
-    - `ops.rs` — the `Op` enum the UI sends, and per-repository undo/redo stacks.
-- `src-tauri/src/lib.rs` — Tauri commands, windows (welcome + one per repository), menu,
+    - `parse.rs`: porcelain v2 status, unified diffs, log, refs, stashes, numstat.
+    - `patch.rs`: partial patches for staging, unstaging or discarding single lines.
+    - `rewrite.rs`: rename / remove / squash any commit through a scripted `rebase -i`.
+    - `repo.rs`: every operation, each returning an `Undoable`.
+    - `ops.rs`: the `Op` enum the UI sends, and per-repository undo/redo stacks.
+- `src-tauri/src/lib.rs`: Tauri commands, windows (welcome + one per repository), menu,
   file watching, opening folders from Finder/Dock.
-- `src/` — the React UI. `lib/store.ts` holds a window's state; `views/` has Welcome, Changes and
+- `src/`: the React UI. `lib/store.ts` holds a window's state; `views/` has Welcome, Changes and
   History; `components/` has the virtualized diff, command palette (⌘K) and dialogs.
 
 ## How undo works
@@ -58,6 +70,8 @@ Before an action, Seam records what it needs to reverse it: the index as a tree
 (`git write-tree`), file contents as blobs (`git hash-object -w`), or the old branch tip, kept
 alive under `refs/seam/undo/*`. ⌘Z outside a text field undoes the last git action; ⇧⌘Z redoes it.
 Pushes can't be undone. Undo history lasts until the window closes.
+
+The website lives in `site/` (`pnpm site:dev`) and deploys to GitHub Pages from `main`.
 
 `app-icon.svg` is the icon source: `pnpm tauri icon app-icon.svg` regenerates `src-tauri/icons`.
 
