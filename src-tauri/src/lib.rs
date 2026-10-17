@@ -4,6 +4,7 @@ pub mod git;
 mod prefs;
 pub mod review;
 mod tray;
+pub mod visual;
 
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
@@ -26,6 +27,7 @@ use tauri::{
     WebviewWindow, WebviewWindowBuilder, Window,
 };
 use tauri_plugin_dialog::DialogExt;
+use visual::{PlanSummary, Visual, VisualKind, VisualState};
 
 type CmdResult<T> = Result<T, GitError>;
 
@@ -37,6 +39,8 @@ struct AppState {
     watchers: Mutex<HashMap<String, Debouncer<notify_debouncer_mini::notify::RecommendedWatcher>>>,
     reviews: Mutex<HashMap<PathBuf, ReviewState>>,
     review_tasks: Mutex<HashMap<PathBuf, tauri::async_runtime::JoinHandle<()>>>,
+    visuals: Mutex<HashMap<(PathBuf, VisualKind), VisualState>>,
+    visual_tasks: Mutex<HashMap<(PathBuf, VisualKind), tauri::async_runtime::JoinHandle<()>>>,
     /// Which repository each window shows, by window label.
     window_roots: Mutex<HashMap<String, PathBuf>>,
     /// The repository window focused last; the tray offers to review it.
@@ -655,6 +659,226 @@ async fn start_review_task(app: &AppHandle, root: PathBuf, config: AiConfig) -> 
     Ok(())
 }
 
+// MARK: Commands: visual recaps and plans
+
+fn emit_visual(app: &AppHandle, root: &Path) {
+    let _ = app.emit("visual-updated", root.to_string_lossy());
+}
+
+fn set_visual(app: &AppHandle, root: &Path, kind: VisualKind, state: VisualState) {
+    app.state::<AppState>()
+        .visuals
+        .lock()
+        .unwrap()
+        .insert((root.to_path_buf(), kind), state);
+    emit_visual(app, root);
+}
+
+/// The one running or finished this session, else the saved recap or the newest plan.
+async fn visual_state_for(app: &AppHandle, root: &Path, kind: VisualKind) -> VisualState {
+    let key = (root.to_path_buf(), kind);
+    if let Some(state) = app.state::<AppState>().visuals.lock().unwrap().get(&key) {
+        return state.clone();
+    }
+    let saved = match Repo::new(root).git_dir().await {
+        Ok(dir) => match kind {
+            VisualKind::Recap => visual::load_recap(&dir),
+            VisualKind::Plan => visual::plans(&dir)
+                .first()
+                .and_then(|plan| visual::load_plan(&dir, &plan.id)),
+        },
+        Err(_) => None,
+    };
+    let state = saved.map_or(VisualState::Idle, |visual| VisualState::Done { visual });
+    app.state::<AppState>()
+        .visuals
+        .lock()
+        .unwrap()
+        .entry(key)
+        .or_insert_with(|| state.clone());
+    state
+}
+
+fn previous_visual(state: VisualState) -> Option<Visual> {
+    match state {
+        VisualState::Done { visual } => Some(visual),
+        VisualState::Failed { previous, .. } => previous,
+        _ => None,
+    }
+}
+
+#[tauri::command]
+async fn visual_state(app: AppHandle, root: String, kind: VisualKind) -> VisualState {
+    visual_state_for(&app, Path::new(&root), kind).await
+}
+
+#[tauri::command]
+async fn visual_plans(root: String) -> Vec<PlanSummary> {
+    match Repo::new(Path::new(&root)).git_dir().await {
+        Ok(dir) => visual::plans(&dir),
+        Err(_) => vec![],
+    }
+}
+
+#[tauri::command]
+async fn open_visual_plan(app: AppHandle, root: String, id: String) -> CmdResult<()> {
+    let root = PathBuf::from(root);
+    let dir = Repo::new(&root).git_dir().await?;
+    let visual = visual::load_plan(&dir, &id).ok_or_else(|| GitError::new("That plan is gone."))?;
+    set_visual(&app, &root, VisualKind::Plan, VisualState::Done { visual });
+    Ok(())
+}
+
+/// Starts a recap of the branch, or a plan for `prompt`, with the configured AI or `provider`.
+#[tauri::command]
+async fn start_visual(
+    app: AppHandle,
+    root: String,
+    kind: VisualKind,
+    prompt: Option<String>,
+    provider: Option<Provider>,
+) -> CmdResult<()> {
+    let root = PathBuf::from(root);
+    let mut config = app.state::<PrefsStore>().ai();
+    if let Some(provider) = provider {
+        if provider != config.provider {
+            config.provider = provider;
+            config.model.clear();
+        }
+    }
+    let current = visual_state_for(&app, &root, kind).await;
+    if matches!(current, VisualState::Running { .. }) {
+        return Ok(());
+    }
+    let prompt = prompt
+        .map(|p| p.trim().to_string())
+        .filter(|p| !p.is_empty());
+    let repo = Repo::new(&root);
+    let scope = match kind {
+        VisualKind::Recap => review::scope(&repo).await,
+        VisualKind::Plan if prompt.is_none() => {
+            Err(GitError::new("Describe the change to plan first."))
+        }
+        VisualKind::Plan => visual::plan_scope(&repo).await,
+    };
+    let scope = match scope {
+        Ok(scope) => scope,
+        Err(e) => {
+            set_visual(
+                &app,
+                &root,
+                kind,
+                VisualState::Failed {
+                    kind,
+                    provider: config.provider,
+                    message: e.message.clone(),
+                    previous: previous_visual(current),
+                },
+            );
+            return Err(e);
+        }
+    };
+    set_visual(
+        &app,
+        &root,
+        kind,
+        VisualState::Running {
+            kind,
+            provider: config.provider,
+            scope: scope.label.clone(),
+            prompt: prompt.clone(),
+            started_at: review::now_secs(),
+        },
+    );
+
+    let handle = app.clone();
+    let task_root = root.clone();
+    let previous = previous_visual(current);
+    let task = tauri::async_runtime::spawn(async move {
+        let state = match visual::run(&config, &task_root, kind, scope, prompt).await {
+            Ok(visual) => {
+                if let Ok(dir) = Repo::new(&task_root).git_dir().await {
+                    visual::save(&dir, &visual);
+                }
+                VisualState::Done { visual }
+            }
+            Err(e) => VisualState::Failed {
+                kind,
+                provider: config.provider,
+                message: e.message,
+                previous,
+            },
+        };
+        handle
+            .state::<AppState>()
+            .visual_tasks
+            .lock()
+            .unwrap()
+            .remove(&(task_root.clone(), kind));
+        set_visual(&handle, &task_root, kind, state);
+    });
+    app.state::<AppState>()
+        .visual_tasks
+        .lock()
+        .unwrap()
+        .insert((root, kind), task);
+    Ok(())
+}
+
+#[tauri::command]
+async fn cancel_visual(app: AppHandle, root: String, kind: VisualKind) {
+    let key = (PathBuf::from(root), kind);
+    // Dropping the task kills the agent process (kill_on_drop).
+    if let Some(task) = app
+        .state::<AppState>()
+        .visual_tasks
+        .lock()
+        .unwrap()
+        .remove(&key)
+    {
+        task.abort();
+    }
+    let state = app.state::<AppState>();
+    let mut visuals = state.visuals.lock().unwrap();
+    if matches!(visuals.get(&key), Some(VisualState::Running { .. })) {
+        visuals.remove(&key);
+    }
+    drop(visuals);
+    emit_visual(&app, &key.0);
+}
+
+/// Asks where to save an export and writes it there; the renderer never names a path.
+#[tauri::command]
+async fn export_visual(
+    window: WebviewWindow,
+    name: String,
+    extension: String,
+    contents: String,
+) -> CmdResult<bool> {
+    let (sender, receiver) = tokio::sync::oneshot::channel();
+    window
+        .dialog()
+        .file()
+        .set_parent(&window)
+        .set_file_name(format!("{name}.{extension}"))
+        .add_filter(extension.to_uppercase(), &[extension.as_str()])
+        .save_file(move |path| {
+            let _ = sender.send(path);
+        });
+    let Some(path) = receiver.await.ok().flatten() else {
+        return Ok(false);
+    };
+    let path = path.into_path().map_err(|e| GitError::new(e.to_string()))?;
+    std::fs::write(&path, contents)?;
+    Ok(true)
+}
+
+/// The system print dialog, whose PDF menu saves the visual as a PDF.
+#[tauri::command]
+fn print_window(window: WebviewWindow) -> CmdResult<()> {
+    window.print().map_err(|e| GitError::new(e.to_string()))
+}
+
 // MARK: Commands: AI
 
 #[tauri::command]
@@ -881,6 +1105,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &item("view-changes", "Changes", Some("CmdOrCtrl+1"))?,
             &item("view-history", "History", Some("CmdOrCtrl+2"))?,
             &item("view-review", "Review", Some("CmdOrCtrl+3"))?,
+            &item("view-visual", "Visual", Some("CmdOrCtrl+4"))?,
             &item("expand-diff", "Expand Diff", Some("CmdOrCtrl+Shift+E"))?,
             &PredefinedMenuItem::separator(app)?,
             &item("toggle-left", "Toggle Sidebar", Some("CmdOrCtrl+B"))?,
@@ -910,6 +1135,12 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
                 "Review Branch with AI",
                 Some("CmdOrCtrl+Shift+R"),
             )?,
+            &item(
+                "recap-branch",
+                "Recap Branch Visually",
+                Some("CmdOrCtrl+Shift+V"),
+            )?,
+            &item("plan-change", "Plan a Change…", None)?,
             &item("uncommit", "Undo Last Commit", None)?,
             &PredefinedMenuItem::separator(app)?,
             &item("reveal", "Show in Finder", None)?,
@@ -1000,6 +1231,13 @@ pub fn run() {
             recent_repositories,
             remove_recent_repository,
             import_recent_repositories,
+            visual_state,
+            visual_plans,
+            open_visual_plan,
+            start_visual,
+            cancel_visual,
+            export_visual,
+            print_window,
             cli::cli_status,
             cli::set_cli_installed,
         ])
