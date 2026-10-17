@@ -24,7 +24,7 @@ const PANES: PaneDefinition[] = [
         icon: 'gear',
         id: 'general',
         label: 'General',
-        terms: 'git executable path pull fast-forward rebase merge diff layout unified split whitespace syntax highlighting colours code languages menu bar tray recent repositories terminal command line cli shell path install',
+        terms: 'git executable path pull fast-forward rebase merge diff layout unified split whitespace syntax highlighting colours code languages menu bar tray recent repositories terminal command line cli shell path install notification notify sound alert finished',
     },
     {
         Body: AppearancePane,
