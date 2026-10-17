@@ -101,7 +101,7 @@ static SHELL_ENV: OnceCell<HashMap<String, String>> = OnceCell::const_new();
 
 /// Apps launched from Finder get launchd's minimal environment, so hooks that need node,
 /// python or a version manager fail. Ask the login shell for its environment once.
-async fn base_env() -> &'static HashMap<String, String> {
+pub async fn base_env() -> &'static HashMap<String, String> {
     SHELL_ENV
         .get_or_init(|| async {
             let mut env: HashMap<String, String> = std::env::vars().collect();
