@@ -28,9 +28,12 @@ use tauri::{
     WebviewWindow, WebviewWindowBuilder, Window,
 };
 use tauri_plugin_dialog::DialogExt;
-use visual::{PlanSummary, ScopeSummary, Visual, VisualKind, VisualState};
+use visual::{ScopeSummary, Visual, VisualKind, VisualState, VisualSummary};
 
 type CmdResult<T> = Result<T, GitError>;
+
+/// A recap or plan state, with the branch it was shown on: a recap is shown only there.
+type ShownVisual = (Option<String>, VisualState);
 
 #[derive(Default)]
 struct AppState {
@@ -40,7 +43,7 @@ struct AppState {
     watchers: Mutex<HashMap<String, Debouncer<notify_debouncer_mini::notify::RecommendedWatcher>>>,
     reviews: Mutex<HashMap<PathBuf, ReviewState>>,
     review_tasks: Mutex<HashMap<PathBuf, tauri::async_runtime::JoinHandle<()>>>,
-    visuals: Mutex<HashMap<(PathBuf, VisualKind), VisualState>>,
+    visuals: Mutex<HashMap<(PathBuf, VisualKind), ShownVisual>>,
     visual_tasks: Mutex<HashMap<(PathBuf, VisualKind), tauri::async_runtime::JoinHandle<()>>>,
     /// Which repository each window shows, by window label.
     window_roots: Mutex<HashMap<String, PathBuf>>,
@@ -667,28 +670,35 @@ fn emit_visual(app: &AppHandle, root: &Path) {
     let _ = app.emit("visual-updated", root.to_string_lossy());
 }
 
-fn set_visual(app: &AppHandle, root: &Path, kind: VisualKind, state: VisualState) {
+fn set_visual(
+    app: &AppHandle,
+    root: &Path,
+    kind: VisualKind,
+    branch: Option<String>,
+    state: VisualState,
+) {
     app.state::<AppState>()
         .visuals
         .lock()
         .unwrap()
-        .insert((root.to_path_buf(), kind), state);
+        .insert((root.to_path_buf(), kind), (branch, state));
     emit_visual(app, root);
 }
 
-/// The one running or finished this session, else the saved recap or the newest plan.
+/// The one running, else the one shown on this branch this session, else the newest saved
+/// recap of this branch (or plan of any). Switching branches is what brings the change.
 async fn visual_state_for(app: &AppHandle, root: &Path, kind: VisualKind) -> VisualState {
     let key = (root.to_path_buf(), kind);
-    if let Some(state) = app.state::<AppState>().visuals.lock().unwrap().get(&key) {
-        return state.clone();
+    let repo = Repo::new(root);
+    let branch = repo.current_branch().await;
+    if let Some((shown_on, state)) = app.state::<AppState>().visuals.lock().unwrap().get(&key) {
+        let current = kind == VisualKind::Plan || *shown_on == branch;
+        if current || matches!(state, VisualState::Running { .. }) {
+            return state.clone();
+        }
     }
-    let saved = match Repo::new(root).git_dir().await {
-        Ok(dir) => match kind {
-            VisualKind::Recap => visual::load_recap(&dir),
-            VisualKind::Plan => visual::plans(&dir)
-                .first()
-                .and_then(|plan| visual::load_plan(&dir, &plan.id)),
-        },
+    let saved = match repo.git_dir().await {
+        Ok(dir) => visual::latest(&dir, kind, branch.as_deref()),
         Err(_) => None,
     };
     let state = saved.map_or(VisualState::Idle, |visual| VisualState::Done { visual });
@@ -696,8 +706,7 @@ async fn visual_state_for(app: &AppHandle, root: &Path, kind: VisualKind) -> Vis
         .visuals
         .lock()
         .unwrap()
-        .entry(key)
-        .or_insert_with(|| state.clone());
+        .insert(key, (branch, state.clone()));
     state
 }
 
@@ -721,20 +730,24 @@ async fn visual_scope(root: String) -> CmdResult<ScopeSummary> {
     Ok(ScopeSummary::of(&scope))
 }
 
+/// Every saved recap or plan, newest first, from every branch.
 #[tauri::command]
-async fn visual_plans(root: String) -> Vec<PlanSummary> {
+async fn visual_history(root: String, kind: VisualKind) -> Vec<VisualSummary> {
     match Repo::new(Path::new(&root)).git_dir().await {
-        Ok(dir) => visual::plans(&dir),
+        Ok(dir) => visual::history(&dir, kind),
         Err(_) => vec![],
     }
 }
 
+/// Shows a saved one, from any branch, until the branch changes.
 #[tauri::command]
-async fn open_visual_plan(app: AppHandle, root: String, id: String) -> CmdResult<()> {
+async fn open_visual(app: AppHandle, root: String, kind: VisualKind, id: String) -> CmdResult<()> {
     let root = PathBuf::from(root);
-    let dir = Repo::new(&root).git_dir().await?;
-    let visual = visual::load_plan(&dir, &id).ok_or_else(|| GitError::new("That plan is gone."))?;
-    set_visual(&app, &root, VisualKind::Plan, VisualState::Done { visual });
+    let repo = Repo::new(&root);
+    let dir = repo.git_dir().await?;
+    let visual = visual::load(&dir, kind, &id).ok_or_else(|| GitError::new("That one is gone."))?;
+    let branch = repo.current_branch().await;
+    set_visual(&app, &root, kind, branch, VisualState::Done { visual });
     Ok(())
 }
 
@@ -763,6 +776,7 @@ async fn start_visual(
         .map(|p| p.trim().to_string())
         .filter(|p| !p.is_empty());
     let repo = Repo::new(&root);
+    let branch = repo.current_branch().await;
     let scope = match kind {
         VisualKind::Recap => review::scope(&repo).await,
         VisualKind::Plan if prompt.is_none() => {
@@ -777,6 +791,7 @@ async fn start_visual(
                 &app,
                 &root,
                 kind,
+                branch,
                 VisualState::Failed {
                     kind,
                     provider: config.provider,
@@ -791,6 +806,7 @@ async fn start_visual(
         &app,
         &root,
         kind,
+        branch.clone(),
         VisualState::Running {
             kind,
             provider: config.provider,
@@ -807,7 +823,8 @@ async fn start_visual(
     let previous = previous_visual(current);
     let task = tauri::async_runtime::spawn(async move {
         let state = match visual::run(&config, &task_root, kind, scope, prompt).await {
-            Ok(visual) => {
+            Ok(mut visual) => {
+                visual.branch = branch.clone();
                 if let Ok(dir) = Repo::new(&task_root).git_dir().await {
                     visual::save(&dir, &visual);
                 }
@@ -827,7 +844,7 @@ async fn start_visual(
             .unwrap()
             .remove(&(task_root.clone(), kind));
         notify_visual(&handle, &task_root, &state);
-        set_visual(&handle, &task_root, kind, state);
+        set_visual(&handle, &task_root, kind, branch, state);
     });
     app.state::<AppState>()
         .visual_tasks
@@ -852,7 +869,7 @@ async fn cancel_visual(app: AppHandle, root: String, kind: VisualKind) {
     }
     let state = app.state::<AppState>();
     let mut visuals = state.visuals.lock().unwrap();
-    if matches!(visuals.get(&key), Some(VisualState::Running { .. })) {
+    if matches!(visuals.get(&key), Some((_, VisualState::Running { .. }))) {
         visuals.remove(&key);
     }
     drop(visuals);
@@ -1320,9 +1337,9 @@ pub fn run() {
             remove_recent_repository,
             import_recent_repositories,
             visual_state,
-            visual_plans,
+            visual_history,
             visual_scope,
-            open_visual_plan,
+            open_visual,
             start_visual,
             cancel_visual,
             export_visual,
