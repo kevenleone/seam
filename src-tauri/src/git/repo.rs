@@ -232,6 +232,39 @@ impl Repo {
         Ok(None)
     }
 
+    /// A blob's bytes by the (possibly abbreviated) id a diff's `index` line names.
+    pub async fn blob(&self, object: &str, path: Option<&str>) -> Result<Vec<u8>> {
+        let read = RunOptions {
+            read: true,
+            allow_failure: true,
+            ..Default::default()
+        };
+        let spec = format!("{object}^{{blob}}");
+        let exists = self.run_with(&["cat-file", "-e", &spec], read).await?;
+        if exists.code == 0 {
+            return Ok(self
+                .run_with(
+                    &["cat-file", "blob", &spec],
+                    RunOptions {
+                        read: true,
+                        ..Default::default()
+                    },
+                )
+                .await?
+                .stdout);
+        }
+        // An unstaged or untracked diff names the working-tree file's hash without writing the object.
+        if let Some(path) = path {
+            let hash = self
+                .try_line(&["hash-object", "--no-filters", "--", path])
+                .await;
+            if hash.is_some_and(|hash| hash.starts_with(object)) {
+                return Ok(tokio::fs::read(self.root.join(path)).await?);
+            }
+        }
+        Err(GitError::new(format!("No object {object}")))
+    }
+
     pub async fn diff(
         &self,
         path: &str,
