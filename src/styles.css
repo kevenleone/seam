@@ -155,6 +155,59 @@
     }
 }
 
+/* Syntax colours (highlight.js classes) from the theme's --syn-* tokens. */
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-section,
+.hljs-name,
+.hljs-meta .hljs-keyword {
+    color: var(--syn-keyword);
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-symbol,
+.hljs-template-tag,
+.hljs-link {
+    color: var(--syn-string);
+}
+.hljs-number,
+.hljs-literal,
+.hljs-bullet {
+    color: var(--syn-number);
+}
+.hljs-comment,
+.hljs-quote {
+    color: var(--syn-comment);
+    font-style: italic;
+}
+.hljs-title,
+.hljs-title.function_,
+.hljs-selector-class,
+.hljs-selector-id {
+    color: var(--syn-function);
+}
+.hljs-type,
+.hljs-built_in,
+.hljs-title.class_,
+.hljs-class .hljs-title {
+    color: var(--syn-type);
+}
+.hljs-attr,
+.hljs-attribute,
+.hljs-property,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-meta {
+    color: var(--syn-attr);
+}
+.hljs-section,
+.hljs-strong {
+    font-weight: 600;
+}
+.hljs-emphasis {
+    font-style: italic;
+}
+
 /* Settings › Appearance › Reduce motion: panels and the diff expander snap instead of sliding. */
 [data-motion='reduced'] *,
 [data-motion='reduced'] *::before,

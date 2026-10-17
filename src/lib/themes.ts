@@ -11,6 +11,8 @@ export interface ThemeDefinition {
     tokens: Record<string, string>;
 }
 
+type Syntax = [string, string, string, string, string, string, string];
+
 interface ThemeSeed {
     /** Additions: a blue from the palette. */
     add: string;
@@ -25,7 +27,19 @@ interface ThemeSeed {
     mode: Mode;
     panel: string;
     soft: string;
+    /** keyword, string, number, comment, function, type, attribute: the palette's own syntax colours. */
+    syntax: Syntax;
 }
+
+const SYNTAX_TOKENS = [
+    '--syn-keyword',
+    '--syn-string',
+    '--syn-number',
+    '--syn-comment',
+    '--syn-function',
+    '--syn-type',
+    '--syn-attr',
+];
 
 const channels = (hex: string): [number, number, number] => {
     const match = /^#?([0-9a-f]{6})$/i.exec(hex);
@@ -56,6 +70,7 @@ function buildTokens(seed: ThemeSeed): Record<string, string> {
     const dark = seed.mode === 'dark';
 
     return {
+        ...Object.fromEntries(SYNTAX_TOKENS.map((token, index) => [token, seed.syntax[index]])),
         '--add': seed.add,
         '--add-bg': mix(seed.add, seed.app, dark ? 0.13 : 0.1),
         '--add-gutter': mix(seed.add, seed.app, dark ? 0.22 : 0.18),
@@ -114,6 +129,13 @@ const SEAM_DARK: Record<string, string> = {
     '--panel': '#16171c',
     '--selected': '#23252e',
     '--shadow': SHADOW.dark,
+    '--syn-attr': '#8fd0d9',
+    '--syn-comment': '#6f7280',
+    '--syn-function': '#82b8ff',
+    '--syn-keyword': '#c3a6ff',
+    '--syn-number': '#f0b37e',
+    '--syn-string': '#9fd3a8',
+    '--syn-type': '#e9c46a',
     '--tab-active': '#33353f',
     '--warn-bg': '#24180f',
     '--warn-fg': '#f5b888',
@@ -145,6 +167,13 @@ const SEAM_LIGHT: Record<string, string> = {
     '--panel': '#f3f2ee',
     '--selected': '#e6e4de',
     '--shadow': SHADOW.light,
+    '--syn-attr': '#2a7b8c',
+    '--syn-comment': '#8a8b93',
+    '--syn-function': '#1f5fb4',
+    '--syn-keyword': '#7a4fd6',
+    '--syn-number': '#a35a12',
+    '--syn-string': '#2f7d4f',
+    '--syn-type': '#8a6d10',
     '--tab-active': '#ffffff',
     '--warn-bg': '#fff3e6',
     '--warn-fg': '#8c4a1a',
@@ -168,6 +197,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'dark',
             panel: '#0a0a0d',
             soft: '#9a9aa6',
+            syntax: ['#b9a3e0', '#7fc39a', '#d3ac72', '#6a6a76', '#8f9bf0', '#d08fa8', '#7fc7c0'],
         },
     },
     {
@@ -185,6 +215,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'dark',
             panel: '#060607',
             soft: '#9c9ca4',
+            syntax: ['#a894d4', '#74b892', '#c69f6a', '#6e6e76', '#7f95d8', '#c8869c', '#74b8b2'],
         },
     },
     {
@@ -202,6 +233,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'dark',
             panel: '#21222c',
             soft: '#b6b8c8',
+            syntax: ['#ff79c6', '#f1fa8c', '#bd93f9', '#6272a4', '#50fa7b', '#8be9fd', '#66d9ef'],
         },
     },
     {
@@ -219,6 +251,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'dark',
             panel: '#181825',
             soft: '#a6adc8',
+            syntax: ['#cba6f7', '#a6e3a1', '#fab387', '#7f849c', '#89b4fa', '#f9e2af', '#94e2d5'],
         },
     },
     {
@@ -236,6 +269,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'dark',
             panel: '#292c3c',
             soft: '#a5adce',
+            syntax: ['#ca9ee6', '#a6d189', '#ef9f76', '#838ba7', '#8caaee', '#e5c890', '#81c8be'],
         },
     },
     {
@@ -253,6 +287,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'dark',
             panel: '#191724',
             soft: '#908caa',
+            syntax: ['#c4a7e7', '#f6c177', '#ebbcba', '#6e6a86', '#9ccfd8', '#ea9a97', '#3e8fb0'],
         },
     },
     {
@@ -270,6 +305,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'dark',
             panel: '#292e39',
             soft: '#d8dee9',
+            syntax: ['#81a1c1', '#a3be8c', '#b48ead', '#616e88', '#88c0d0', '#8fbcbb', '#ebcb8b'],
         },
     },
     {
@@ -287,6 +323,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'dark',
             panel: '#21252b',
             soft: '#abb2bf',
+            syntax: ['#c678dd', '#98c379', '#d19a66', '#7f848e', '#61afef', '#e5c07b', '#e06c75'],
         },
     },
     {
@@ -304,6 +341,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'dark',
             panel: '#16161e',
             soft: '#a9b1d6',
+            syntax: ['#bb9af7', '#9ece6a', '#ff9e64', '#565f89', '#7aa2f7', '#2ac3de', '#73daca'],
         },
     },
     {
@@ -321,6 +359,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'dark',
             panel: '#00252e',
             soft: '#93a1a1',
+            syntax: ['#859900', '#2aa198', '#d33682', '#586e75', '#268bd2', '#b58900', '#cb4b16'],
         },
     },
     {
@@ -338,6 +377,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'dark',
             panel: '#1d2021',
             soft: '#bdae93',
+            syntax: ['#fb4934', '#b8bb26', '#d3869b', '#928374', '#fabd2f', '#8ec07c', '#83a598'],
         },
     },
     {
@@ -355,6 +395,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'light',
             panel: '#e6e9ef',
             soft: '#6c6f85',
+            syntax: ['#8839ef', '#40a02b', '#fe640b', '#9ca0b0', '#1e66f5', '#df8e1d', '#179299'],
         },
     },
     {
@@ -372,6 +413,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'light',
             panel: '#faf4ed',
             soft: '#797593',
+            syntax: ['#907aa9', '#ea9d34', '#d7827e', '#9893a5', '#286983', '#b4637a', '#56949f'],
         },
     },
     {
@@ -389,6 +431,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'light',
             panel: '#f5eeda',
             soft: '#586e75',
+            syntax: ['#859900', '#2aa198', '#d33682', '#93a1a1', '#268bd2', '#b58900', '#cb4b16'],
         },
     },
     {
@@ -406,6 +449,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'light',
             panel: '#f6f8fa',
             soft: '#59636e',
+            syntax: ['#cf222e', '#0a3069', '#0550ae', '#6e7781', '#8250df', '#953800', '#116329'],
         },
     },
     {
@@ -423,6 +467,7 @@ const SEEDS: { id: string; name: string; seed: ThemeSeed }[] = [
             mode: 'light',
             panel: '#f2e5bc',
             soft: '#504945',
+            syntax: ['#9d0006', '#79740e', '#8f3f71', '#928374', '#b57614', '#427b58', '#076678'],
         },
     },
 ];

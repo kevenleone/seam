@@ -122,6 +122,8 @@ in the `@theme inline` block of `src/styles.css`.
   the root and caches the map; `public/theme.js` repaints that cache before the
   bundle loads, so the first frame is already right. A new token is added to
   `SEAM_DARK`, `SEAM_LIGHT` and `buildTokens`, and bridged in `@theme inline`.
+  Syntax colours are the seven `--syn-*` tokens, mapped onto highlight.js classes in
+  `styles.css`; `src/lib/highlight.ts` bundles only the languages it registers.
 - Colours come from tokens (`bg-panel`, `text-muted`), never a hex in a
   component, and there is no `dark:` variant.
 - An inline `style` is right only for values a class cannot carry (a computed

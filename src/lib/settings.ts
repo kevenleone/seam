@@ -21,6 +21,8 @@ export interface Settings {
     rightPanel: boolean;
     splitDiff: boolean;
     statusBar: boolean;
+    /** Colours code in diffs for the languages in lib/highlight.ts. */
+    syntaxHighlight: boolean;
     /** Colour mode. */
     theme: Theme;
 }
@@ -40,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
     rightPanel: true,
     splitDiff: false,
     statusBar: true,
+    syntaxHighlight: true,
     theme: 'dark',
 };
 

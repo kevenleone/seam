@@ -103,6 +103,16 @@ export function GeneralPane() {
                 />
             </Row>
             <Row
+                desc="Colours code in diffs: TypeScript, JavaScript, Rust, Python, Java, Go, Markdown, JSON, YAML, CSS, HTML, shell, SQL, C, C++, C#, Kotlin, Swift, Ruby, PHP and more. Each theme brings its own colours."
+                title="Syntax highlighting"
+            >
+                <Toggle
+                    label="Syntax highlighting"
+                    on={settings.syntaxHighlight}
+                    onChange={(syntaxHighlight) => updateSettings({ syntaxHighlight })}
+                />
+            </Row>
+            <Row
                 desc="Lines that only change indentation or spacing are left out."
                 last
                 title="Ignore whitespace"

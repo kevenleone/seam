@@ -1,11 +1,12 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ReviewFocus } from '../lib/store';
 import type { DiffLine, FileDiff, Finding, Hunk, LineAction } from '../lib/types';
 
 import { useSettings } from '../lib/settings';
 import { isChange } from '../lib/store';
+import { useHighlighter } from '../lib/useHighlighter';
 import { FindingCard } from './FindingCard';
 import { Icon } from './Icon';
 import { Button } from './ui';
@@ -26,6 +27,12 @@ export interface DiffInteraction {
     toggle(hunk: number, line: number, range: boolean): void;
 }
 
+/** Highlighted HTML for each diff line, when syntax highlighting is on and the language is known. */
+const Highlighted = createContext<null | WeakMap<DiffLine, string>>(null);
+
+/** Above this many lines a diff is shown plain: highlighting it would stall the window. */
+const HIGHLIGHT_LIMIT = 20_000;
+
 type Row =
     | { collapsed: boolean; diff: FileDiff; t: 'file' }
     | { finding: Finding; t: 'comment' }
@@ -43,7 +50,55 @@ export function DiffView({
     diffs: FileDiff[];
     interaction?: DiffInteraction;
 }) {
-    const { codeSize, splitDiff } = useSettings();
+    const { codeSize, splitDiff, syntaxHighlight } = useSettings();
+    const highlighter = useHighlighter(syntaxHighlight);
+    const highlighted = useMemo(() => {
+        const total = diffs.reduce(
+            (sum, diff) => sum + diff.hunks.reduce((lines, hunk) => lines + hunk.lines.length, 0),
+            0,
+        );
+
+        if (!highlighter || total > HIGHLIGHT_LIMIT) {
+            return null;
+        }
+
+        const html = new WeakMap<DiffLine, string>();
+
+        for (const diff of diffs) {
+            const language = diff.isBinary
+                ? null
+                : highlighter.languageFor(diff.newPath ?? diff.oldPath ?? '');
+
+            if (!language) {
+                continue;
+            }
+
+            for (const hunk of diff.hunks) {
+                // Each side is highlighted as one block; a context line takes the new side's colours.
+                const before = hunk.lines.filter(
+                    (line) => line.kind === 'context' || line.kind === 'deletion',
+                );
+                const after = hunk.lines.filter(
+                    (line) => line.kind === 'context' || line.kind === 'addition',
+                );
+                const beforeHtml = highlighter.highlightLines(
+                    before.map((line) => line.text),
+                    language,
+                );
+                const afterHtml = highlighter.highlightLines(
+                    after.map((line) => line.text),
+                    language,
+                );
+
+                before.forEach(
+                    (line, index) => line.kind === 'deletion' && html.set(line, beforeHtml[index]),
+                );
+                after.forEach((line, index) => html.set(line, afterHtml[index]));
+            }
+        }
+
+        return html;
+    }, [diffs, highlighter]);
     const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
     const multi = diffs.length > 1 || !interaction;
     const lineHeight = Math.round(codeSize * 1.72);
@@ -180,78 +235,80 @@ export function DiffView({
     const contentWidth = splitDiff ? '100%' : `max(100%, calc(${maxChars + 4}ch + 110px))`;
 
     return (
-        <div
-            className="relative min-h-0 flex-1 overflow-auto"
-            ref={scrollRef}
-            style={{ fontSize: codeSize }}
-        >
+        <Highlighted.Provider value={highlighted}>
             <div
-                className="font-mono"
-                style={{
-                    height: virtualizer.getTotalSize(),
-                    position: 'relative',
-                    width: contentWidth,
-                }}
+                className="relative min-h-0 flex-1 overflow-auto"
+                ref={scrollRef}
+                style={{ fontSize: codeSize }}
             >
-                {virtualizer.getVirtualItems().map((item) => {
-                    const row = rows[item.index];
+                <div
+                    className="font-mono"
+                    style={{
+                        height: virtualizer.getTotalSize(),
+                        position: 'relative',
+                        width: contentWidth,
+                    }}
+                >
+                    {virtualizer.getVirtualItems().map((item) => {
+                        const row = rows[item.index];
 
-                    return (
-                        <div
-                            data-index={item.index}
-                            key={item.key}
-                            ref={virtualizer.measureElement}
-                            style={{
-                                left: 0,
-                                position: 'absolute',
-                                top: item.start,
-                                width: '100%',
-                            }}
-                        >
-                            {row.t === 'file' && (
-                                <FileHeader
-                                    collapsed={row.collapsed}
-                                    diff={row.diff}
-                                    onToggle={() =>
-                                        toggleFile(row.diff.newPath ?? row.diff.oldPath ?? '')
-                                    }
-                                />
-                            )}
-                            {row.t === 'hunk' && (
-                                <HunkHeader hunk={row.hunk} interaction={interaction} />
-                            )}
-                            {row.t === 'comment' && comments && (
-                                <FindingCard
-                                    finding={row.finding}
-                                    inline
-                                    onDismiss={() => comments.onDismiss(row.finding.id)}
-                                />
-                            )}
-                            {row.t === 'note' && (
-                                <div className="flex h-16 items-center justify-center font-sans text-muted">
-                                    {row.text}
-                                </div>
-                            )}
-                            {row.t === 'line' && (
-                                <UnifiedLine
-                                    height={lineHeight}
-                                    hunk={row.hunk}
-                                    interaction={interaction}
-                                    line={row.line}
-                                />
-                            )}
-                            {row.t === 'split' && (
-                                <SplitLine
-                                    height={lineHeight}
-                                    interaction={interaction}
-                                    row={row}
-                                />
-                            )}
-                        </div>
-                    );
-                })}
+                        return (
+                            <div
+                                data-index={item.index}
+                                key={item.key}
+                                ref={virtualizer.measureElement}
+                                style={{
+                                    left: 0,
+                                    position: 'absolute',
+                                    top: item.start,
+                                    width: '100%',
+                                }}
+                            >
+                                {row.t === 'file' && (
+                                    <FileHeader
+                                        collapsed={row.collapsed}
+                                        diff={row.diff}
+                                        onToggle={() =>
+                                            toggleFile(row.diff.newPath ?? row.diff.oldPath ?? '')
+                                        }
+                                    />
+                                )}
+                                {row.t === 'hunk' && (
+                                    <HunkHeader hunk={row.hunk} interaction={interaction} />
+                                )}
+                                {row.t === 'comment' && comments && (
+                                    <FindingCard
+                                        finding={row.finding}
+                                        inline
+                                        onDismiss={() => comments.onDismiss(row.finding.id)}
+                                    />
+                                )}
+                                {row.t === 'note' && (
+                                    <div className="flex h-16 items-center justify-center font-sans text-muted">
+                                        {row.text}
+                                    </div>
+                                )}
+                                {row.t === 'line' && (
+                                    <UnifiedLine
+                                        height={lineHeight}
+                                        hunk={row.hunk}
+                                        interaction={interaction}
+                                        line={row.line}
+                                    />
+                                )}
+                                {row.t === 'split' && (
+                                    <SplitLine
+                                        height={lineHeight}
+                                        interaction={interaction}
+                                        row={row}
+                                    />
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
             </div>
-        </div>
+        </Highlighted.Provider>
     );
 }
 
@@ -393,6 +450,8 @@ const styles = {
 };
 
 function Code({ height, line }: { height: number; line: DiffLine }) {
+    const html = useContext(Highlighted)?.get(line);
+
     if (line.kind === 'noNewline') {
         return (
             <span
@@ -407,9 +466,11 @@ function Code({ height, line }: { height: number; line: DiffLine }) {
     return (
         <span
             className="selectable pr-4 pl-1.5 whitespace-pre text-body"
+            // highlight.js escapes the text it is given; the markup is only its own spans.
+            dangerouslySetInnerHTML={html === undefined ? undefined : { __html: html }}
             style={{ lineHeight: `${height}px`, tabSize: 4 }}
         >
-            {line.text}
+            {html === undefined ? line.text : undefined}
         </span>
     );
 }
