@@ -224,7 +224,16 @@ export interface Review {
 export type ReviewFocusArea = 'breaking' | 'bugs' | 'performance' | 'security' | 'style' | 'tests';
 
 export type ReviewState =
-    | { files: number; provider: Provider; scope: string; startedAt: number; status: 'running' }
+    | {
+          /** `%h %s` lines, newest first. */
+          commits: string[];
+          diffs: FileDiff[];
+          files: number;
+          provider: Provider;
+          scope: string;
+          startedAt: number;
+          status: 'running';
+      }
     | { message: string; previous: null | Review; provider: Provider; status: 'failed' }
     | { review: Review; status: 'done' }
     | { status: 'idle' };

@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 import type { Finding, Review, Severity } from '../lib/types';
 
+import { RunBar } from '../components/ChangeOverview';
 import { DiffView } from '../components/DiffView';
 import { ExpandButton } from '../components/ExpandButton';
 import { FindingCard } from '../components/FindingCard';
 import { Icon } from '../components/Icon';
 import { ProviderSelect } from '../components/ProviderSelect';
+import { ReviewEmpty, ReviewRunStatus, WhileReviewing } from '../components/ReviewStates';
 import { Button, Collapsible, relativeTime, SectionLabel } from '../components/ui';
 import { PROVIDER_LABELS } from '../lib/ai';
 import { useSettings } from '../lib/settings';
 import { useSettingsModal } from '../lib/settingsModal';
-import { branchLabel, useRepo } from '../lib/store';
+import { useRepo } from '../lib/store';
 
 const order: Severity[] = ['risk', 'check', 'note'];
 
@@ -36,56 +38,13 @@ export function ReviewView() {
             </Collapsible>
             <section aria-label="Review" className="flex min-w-0 flex-1 flex-col">
                 <ReviewHeader />
+                {review.status === 'running' && <RunBar />}
                 <ReviewBody findings={findings} shown={shown} />
             </section>
             <Collapsible open={rightPanel && !expanded && !!shown} width={360}>
                 {shown && <FindingsPanel findings={findings} review={shown} />}
             </Collapsible>
         </>
-    );
-}
-
-/** An AI run in progress, with its clock; the result shows up even after the window closes. */
-export function Running({
-    detail,
-    expected,
-    onCancel,
-    startedAt,
-    title,
-}: {
-    detail: string;
-    expected: string;
-    onCancel(): void;
-    startedAt: number;
-    title: string;
-}) {
-    const [now, setNow] = useState(() => Date.now() / 1000);
-
-    useEffect(() => {
-        const timer = window.setInterval(() => setNow(Date.now() / 1000), 1000);
-
-        return () => window.clearInterval(timer);
-    }, []);
-
-    const elapsed = Math.max(0, Math.round(now - startedAt));
-    const clock = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, '0')}`;
-
-    return (
-        <div
-            className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center"
-            role="status"
-        >
-            <span className="h-3 w-3 animate-pulse rounded-full bg-accent" />
-            <h2 className="m-0 text-[16px] font-semibold">{title}</h2>
-            <p className="m-0 text-muted">
-                {detail} · <span className="font-mono">{clock}</span> · {expected}
-            </p>
-            <p className="m-0 max-w-md text-[12px] text-dim">
-                You can close this window; Seam keeps working in the menu bar and the result is here
-                when you come back.
-            </p>
-            <Button onClick={onCancel}>Cancel</Button>
-        </div>
     );
 }
 
@@ -139,18 +98,10 @@ function FindingsPanel({ findings, review }: { findings: Finding[]; review: Revi
 }
 
 function ReviewBody({ findings, shown }: { findings: Finding[]; shown: null | Review }) {
-    const { cancelReview, dismissFinding, review, reviewFocus, startReview, status } = useRepo();
+    const { dismissFinding, review, reviewFocus, startReview } = useRepo();
 
     if (review.status === 'running') {
-        return (
-            <Running
-                detail={`${review.files} file${review.files === 1 ? '' : 's'}`}
-                expected="most reviews take one to three minutes"
-                onCancel={cancelReview}
-                startedAt={review.startedAt}
-                title={`${PROVIDER_LABELS[review.provider]} is reviewing ${review.scope}`}
-            />
-        );
+        return <WhileReviewing state={review} />;
     }
 
     const failure =
@@ -180,19 +131,8 @@ function ReviewBody({ findings, shown }: { findings: Finding[]; shown: null | Re
         return (
             <>
                 {failure}
-                <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-                    <Icon className="text-accent" name="sparkle" size={30} />
-                    <h2 className="m-0 text-[16px] font-semibold">
-                        Review {branchLabel(status)} before you merge
-                    </h2>
-                    <p className="m-0 max-w-md leading-normal text-muted">
-                        Seam hands the branch's changes against its base to the model you chose in
-                        Settings (a coding agent you already use, signed in as you, or a provider
-                        under your own key) and puts its comments on the lines that need a look.
-                    </p>
-                    <Button onClick={() => startReview()} variant="primary">
-                        Review {branchLabel(status)}
-                    </Button>
+                <div className="min-h-0 flex-1 overflow-auto">
+                    <ReviewEmpty />
                 </div>
             </>
         );
@@ -272,7 +212,9 @@ function ReviewHeader() {
 
     return (
         <div className="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-2.5">
-            {shown ? (
+            {review.status === 'running' ? (
+                <ReviewRunStatus state={review} />
+            ) : shown ? (
                 <>
                     <span className="font-mono text-[12.5px]">{shown.scope}</span>
                     <span className="text-[12px] text-muted">
@@ -301,15 +243,11 @@ function ReviewHeader() {
             >
                 <Icon name="gear" size={13} />
             </Button>
-            <Button
-                disabled={running}
-                onClick={() => startReview()}
-                size="sm"
-                variant={shown ? 'default' : 'primary'}
-            >
-                <Icon name="refresh" size={12} />{' '}
-                {shown ? 'Re-run review' : `Review ${branchLabel(status)}`}
-            </Button>
+            {shown && !running && (
+                <Button onClick={() => startReview()} size="sm">
+                    <Icon name="refresh" size={12} /> Re-run review
+                </Button>
+            )}
             {shown && <ExpandButton />}
         </div>
     );

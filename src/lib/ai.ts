@@ -1,7 +1,7 @@
 import { listen } from '@tauri-apps/api/event';
 import { useCallback, useEffect, useState } from 'react';
 
-import type { AiConfig, Provider, ProviderStatus } from './types';
+import type { AiConfig, Provider, ProviderStatus, ReviewFocusArea, ReviewStyle } from './types';
 
 import { api } from './api';
 
@@ -13,6 +13,21 @@ export const PROVIDER_LABELS: Record<Provider, string> = {
     openai: 'OpenAI',
     'openai-compatible': 'OpenAI-compatible endpoint',
     opencode: 'OpenCode',
+};
+
+export const REVIEW_FOCUS: { desc: string; id: ReviewFocusArea; title: string }[] = [
+    { desc: 'Wrong conditions, edge cases, null handling', id: 'bugs', title: 'Bugs and logic' },
+    { desc: 'Untrusted input, secrets, auth checks', id: 'security', title: 'Security' },
+    { desc: 'Changed behaviour with no test touching it', id: 'tests', title: 'Missing tests' },
+    { desc: 'Public APIs, response shapes, configs', id: 'breaking', title: 'Breaking changes' },
+    { desc: 'Extra queries, loops, blocking calls', id: 'performance', title: 'Performance' },
+    { desc: 'Naming, dead code, long functions', id: 'style', title: 'Style and readability' },
+];
+
+export const REVIEW_LEVELS: Record<ReviewStyle['level'], string> = {
+    balanced: 'Balanced',
+    blockers: 'Blockers only',
+    thorough: 'Thorough',
 };
 
 /** The AI configuration the host keeps, and every provider's status, kept fresh across windows. */

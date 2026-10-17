@@ -12,7 +12,7 @@ import type {
     ReviewStyle,
 } from '../../lib/types';
 
-import { PROVIDER_LABELS, useAi } from '../../lib/ai';
+import { PROVIDER_LABELS, REVIEW_FOCUS, useAi } from '../../lib/ai';
 import { api, errorMessage } from '../../lib/api';
 import {
     effectiveMode,
@@ -427,15 +427,6 @@ export function AppearancePane() {
 
 // MARK: AI
 
-const FOCUS: { desc: string; id: ReviewFocusArea; title: string }[] = [
-    { desc: 'Wrong conditions, edge cases, null handling', id: 'bugs', title: 'Bugs and logic' },
-    { desc: 'Untrusted input, secrets, auth checks', id: 'security', title: 'Security' },
-    { desc: 'Changed behaviour with no test touching it', id: 'tests', title: 'Missing tests' },
-    { desc: 'Public APIs, response shapes, configs', id: 'breaking', title: 'Breaking changes' },
-    { desc: 'Extra queries, loops, blocking calls', id: 'performance', title: 'Performance' },
-    { desc: 'Naming, dead code, long functions', id: 'style', title: 'Style and readability' },
-];
-
 const LANGUAGES = [
     'English',
     'Português (Brasil)',
@@ -640,7 +631,7 @@ function ReviewStyleRows({
                 title="Look for"
             />
             <div className="grid grid-cols-2 gap-2 pb-3.5">
-                {FOCUS.map((focus) => {
+                {REVIEW_FOCUS.map((focus) => {
                     const on = review.focus.includes(focus.id);
 
                     return (
