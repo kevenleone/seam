@@ -11,7 +11,7 @@ use crate::git::models::FileDiff;
 use crate::git::{parse, Repo, Result};
 use crate::review::{self, Scope};
 
-const MAX_PLANS: usize = 20;
+const MAX_SAVED: usize = 30;
 const MAX_LISTED_FILES: usize = 1500;
 const MAX_DOC_CHARS: usize = 8000;
 
@@ -28,6 +28,9 @@ pub struct Visual {
     pub id: String,
     pub kind: VisualKind,
     pub provider: Provider,
+    /// The branch it was drawn on; a recap is shown again only on that branch.
+    #[serde(default)]
+    pub branch: Option<String>,
     pub scope: String,
     pub prompt: Option<String>,
     pub head_sha: Option<String>,
@@ -65,12 +68,18 @@ impl ScopeSummary {
     }
 }
 
+/// One saved recap or plan, as its history lists it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PlanSummary {
+pub struct VisualSummary {
     pub id: String,
     pub title: String,
+    #[serde(default)]
     pub prompt: String,
+    #[serde(default)]
+    pub branch: Option<String>,
+    #[serde(default)]
+    pub scope: String,
     pub created_at: i64,
 }
 
@@ -833,6 +842,7 @@ pub async fn run(
         prompt: request,
         head_sha: scope.head_sha,
         commits: scope.commits.len(),
+        branch: None,
         title: if title.is_empty() { fallback } else { title },
         brief,
         canvas,
@@ -849,74 +859,132 @@ pub async fn run(
 
 // MARK: Saving
 
-fn recap_path(git_dir: &Path) -> PathBuf {
-    git_dir.join("seam").join("recap.json")
+fn kind_dir(git_dir: &Path, kind: VisualKind) -> PathBuf {
+    git_dir.join("seam").join(match kind {
+        VisualKind::Recap => "recaps",
+        VisualKind::Plan => "plans",
+    })
 }
 
-fn plans_dir(git_dir: &Path) -> PathBuf {
-    git_dir.join("seam").join("plans")
-}
-
-fn plan_path(git_dir: &Path, id: &str) -> Option<PathBuf> {
+fn visual_path(git_dir: &Path, kind: VisualKind, id: &str) -> Option<PathBuf> {
     let safe = !id.is_empty() && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-');
-    safe.then(|| plans_dir(git_dir).join(format!("{id}.json")))
+    safe.then(|| kind_dir(git_dir, kind).join(format!("{id}.json")))
 }
 
-fn write_json(path: &Path, visual: &Visual) {
+fn index_path(git_dir: &Path, kind: VisualKind) -> PathBuf {
+    kind_dir(git_dir, kind).join("index.json")
+}
+
+fn write_file(path: &Path, json: Option<String>) {
     if let Some(dir) = path.parent() {
         let _ = std::fs::create_dir_all(dir);
     }
-    if let Ok(json) = serde_json::to_string(visual) {
+    if let Some(json) = json {
         let _ = std::fs::write(path, json);
     }
 }
 
-fn read_json(path: &Path) -> Option<Visual> {
+fn read_visual(path: &Path) -> Option<Visual> {
     serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
 }
 
-/// The last recap and the last plans are kept in the git directory, never committed.
-pub fn save(git_dir: &Path, visual: &Visual) {
-    match visual.kind {
-        VisualKind::Recap => write_json(&recap_path(git_dir), visual),
-        VisualKind::Plan => {
-            if let Some(path) = plan_path(git_dir, &visual.id) {
-                write_json(&path, visual);
-            }
-            for old in plans(git_dir).iter().skip(MAX_PLANS) {
-                if let Some(path) = plan_path(git_dir, &old.id) {
-                    let _ = std::fs::remove_file(path);
-                }
-            }
-        }
+fn summary(visual: &Visual) -> VisualSummary {
+    VisualSummary {
+        id: visual.id.clone(),
+        title: visual.title.clone(),
+        prompt: visual.prompt.clone().unwrap_or_default(),
+        branch: visual.branch.clone(),
+        scope: visual.scope.clone(),
+        created_at: visual.created_at,
     }
 }
 
-pub fn load_recap(git_dir: &Path) -> Option<Visual> {
-    read_json(&recap_path(git_dir))
+/// `main…feature/x` names the branch it was drawn on.
+fn branch_of_scope(scope: &str) -> Option<String> {
+    scope
+        .split_once('…')
+        .map(|(_, branch)| branch.to_string())
+        .filter(|branch| !branch.is_empty())
 }
 
-pub fn load_plan(git_dir: &Path, id: &str) -> Option<Visual> {
-    read_json(&plan_path(git_dir, id)?)
-}
-
-/// Saved plans, newest first.
-pub fn plans(git_dir: &Path) -> Vec<PlanSummary> {
-    let Ok(entries) = std::fs::read_dir(plans_dir(git_dir)) else {
-        return vec![];
-    };
-    let mut list: Vec<PlanSummary> = entries
-        .flatten()
-        .filter_map(|entry| read_json(&entry.path()))
-        .map(|visual| PlanSummary {
-            id: visual.id,
-            title: visual.title,
-            prompt: visual.prompt.unwrap_or_default(),
-            created_at: visual.created_at,
+/// The index of saved ones, newest first. Built from the files the first time, taking in
+/// the single `recap.json` that builds before the history kept.
+fn index(git_dir: &Path, kind: VisualKind) -> Vec<VisualSummary> {
+    if let Some(list) = std::fs::read_to_string(index_path(git_dir, kind))
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+    {
+        return list;
+    }
+    let mut list: Vec<VisualSummary> = std::fs::read_dir(kind_dir(git_dir, kind))
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.path())
+                .filter(|path| path.file_name().is_some_and(|name| name != "index.json"))
+                .filter_map(|path| read_visual(&path))
+                .map(|visual| summary(&visual))
+                .collect()
         })
-        .collect();
-    list.sort_by_key(|plan| std::cmp::Reverse(plan.created_at));
+        .unwrap_or_default();
+    let legacy = git_dir.join("seam").join("recap.json");
+    if kind == VisualKind::Recap {
+        if let Some(mut visual) = read_visual(&legacy) {
+            visual.branch = visual
+                .branch
+                .clone()
+                .or_else(|| branch_of_scope(&visual.scope));
+            if let Some(path) = visual_path(git_dir, kind, &visual.id) {
+                write_file(&path, serde_json::to_string(&visual).ok());
+                list.retain(|entry| entry.id != visual.id);
+                list.push(summary(&visual));
+                let _ = std::fs::remove_file(&legacy);
+            }
+        }
+    }
+    list.sort_by_key(|entry| std::cmp::Reverse(entry.created_at));
+    write_file(
+        &index_path(git_dir, kind),
+        serde_json::to_string(&list).ok(),
+    );
     list
+}
+
+/// Keeps a recap or plan in the git directory (never committed), the newest `MAX_SAVED` of each.
+pub fn save(git_dir: &Path, visual: &Visual) {
+    let Some(path) = visual_path(git_dir, visual.kind, &visual.id) else {
+        return;
+    };
+    let mut list = index(git_dir, visual.kind);
+    write_file(&path, serde_json::to_string(visual).ok());
+    list.retain(|entry| entry.id != visual.id);
+    list.insert(0, summary(visual));
+    for old in list.iter().skip(MAX_SAVED) {
+        if let Some(path) = visual_path(git_dir, visual.kind, &old.id) {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+    list.truncate(MAX_SAVED);
+    write_file(
+        &index_path(git_dir, visual.kind),
+        serde_json::to_string(&list).ok(),
+    );
+}
+
+pub fn history(git_dir: &Path, kind: VisualKind) -> Vec<VisualSummary> {
+    index(git_dir, kind)
+}
+
+pub fn load(git_dir: &Path, kind: VisualKind, id: &str) -> Option<Visual> {
+    read_visual(&visual_path(git_dir, kind, id)?)
+}
+
+/// The one to show on `branch`: its newest recap, or the newest plan from any branch.
+pub fn latest(git_dir: &Path, kind: VisualKind, branch: Option<&str>) -> Option<Visual> {
+    index(git_dir, kind)
+        .iter()
+        .find(|entry| kind == VisualKind::Plan || entry.branch.as_deref() == branch)
+        .and_then(|entry| load(git_dir, kind, &entry.id))
 }
 
 #[cfg(test)]
@@ -1030,13 +1098,82 @@ mod tests {
     }
 
     #[test]
-    fn plan_ids_cannot_leave_the_plans_folder() {
+    fn ids_cannot_leave_their_folder() {
         let dir = Path::new("/repo/.git");
-        assert!(plan_path(dir, "../../etc/passwd").is_none());
-        assert!(plan_path(dir, "").is_none());
+        assert!(visual_path(dir, VisualKind::Plan, "../../etc/passwd").is_none());
+        assert!(visual_path(dir, VisualKind::Recap, "").is_none());
         assert_eq!(
-            plan_path(dir, "1b2c-3d").unwrap(),
+            visual_path(dir, VisualKind::Plan, "1b2c-3d").unwrap(),
             dir.join("seam/plans/1b2c-3d.json")
         );
+    }
+
+    fn saved(id: &str, branch: &str, created_at: i64) -> Visual {
+        Visual {
+            id: id.into(),
+            kind: VisualKind::Recap,
+            provider: Provider::Claude,
+            branch: Some(branch.into()),
+            scope: format!("main…{branch}"),
+            prompt: None,
+            head_sha: None,
+            commits: 1,
+            title: id.into(),
+            brief: String::new(),
+            canvas: Canvas::default(),
+            blocks: vec![],
+            diffs: vec![],
+            truncated: false,
+            created_at,
+            duration_ms: 0,
+        }
+    }
+
+    #[test]
+    fn a_recap_is_found_again_only_on_its_branch() {
+        let dir = tempfile::tempdir().unwrap();
+        let git_dir = dir.path();
+        save(git_dir, &saved("a1", "feature/a", 1));
+        save(git_dir, &saved("b1", "feature/b", 2));
+        save(git_dir, &saved("a2", "feature/a", 3));
+
+        let ids: Vec<String> = history(git_dir, VisualKind::Recap)
+            .into_iter()
+            .map(|entry| entry.id)
+            .collect();
+        assert_eq!(ids, ["a2", "b1", "a1"]);
+        let latest_id = |branch| latest(git_dir, VisualKind::Recap, branch).map(|v| v.id);
+        assert_eq!(latest_id(Some("feature/a")).as_deref(), Some("a2"));
+        assert_eq!(latest_id(Some("feature/b")).as_deref(), Some("b1"));
+        assert_eq!(latest_id(Some("main")), None);
+    }
+
+    #[test]
+    fn the_single_recap_of_older_builds_joins_the_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let git_dir = dir.path();
+        let mut old = saved("legacy", "feature/old", 5);
+        old.branch = None;
+        write_file(
+            &git_dir.join("seam/recap.json"),
+            serde_json::to_string(&old).ok(),
+        );
+
+        let found = latest(git_dir, VisualKind::Recap, Some("feature/old")).unwrap();
+        assert_eq!(found.id, "legacy");
+        assert!(!git_dir.join("seam/recap.json").exists());
+        assert_eq!(history(git_dir, VisualKind::Recap).len(), 1);
+    }
+
+    #[test]
+    fn only_the_newest_are_kept() {
+        let dir = tempfile::tempdir().unwrap();
+        let git_dir = dir.path();
+        for index in 0..(MAX_SAVED as i64 + 3) {
+            save(git_dir, &saved(&format!("r{index}"), "feature/a", index));
+        }
+        assert_eq!(history(git_dir, VisualKind::Recap).len(), MAX_SAVED);
+        assert!(load(git_dir, VisualKind::Recap, "r0").is_none());
+        assert!(load(git_dir, VisualKind::Recap, "r32").is_some());
     }
 }
