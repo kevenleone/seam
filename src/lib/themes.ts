@@ -96,7 +96,7 @@ function buildTokens(seed: ThemeSeed): Record<string, string> {
         '--panel': seed.panel,
         '--selected': mix(seed.control, seed.fg, dark ? 0.93 : 0.95),
         '--shadow': SHADOW[seed.mode],
-        '--tab-active': dark ? mix(seed.control, seed.fg, 0.86) : seed.app,
+        '--tab-active': mix(seed.control, seed.fg, dark ? 0.86 : 0.9),
         '--warn-bg': mix(seed.del, seed.app, dark ? 0.09 : 0.08),
         '--warn-fg': mix(seed.del, seed.fg, dark ? 0.6 : 0.8),
     };
@@ -174,7 +174,7 @@ const SEAM_LIGHT: Record<string, string> = {
     '--syn-number': '#a35a12',
     '--syn-string': '#2f7d4f',
     '--syn-type': '#8a6d10',
-    '--tab-active': '#ffffff',
+    '--tab-active': '#e6e4de',
     '--warn-bg': '#fff3e6',
     '--warn-fg': '#8c4a1a',
 };
