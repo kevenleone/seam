@@ -2,6 +2,7 @@ pub mod ai;
 mod cli;
 pub mod git;
 mod notify;
+pub mod overview;
 mod prefs;
 pub mod review;
 mod tray;
@@ -19,6 +20,7 @@ use git::models::*;
 use git::ops::{self, History, Op, Outcome};
 use git::{GitError, Repo};
 use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode, DebounceEventResult, Debouncer};
+use overview::{Drift, Facts, Overview, OverviewState, OverviewSummary};
 use prefs::{NotifyPrefs, PrefsStore};
 use review::ReviewState;
 use serde::Serialize;
@@ -45,6 +47,10 @@ struct AppState {
     review_tasks: Mutex<HashMap<PathBuf, tauri::async_runtime::JoinHandle<()>>>,
     visuals: Mutex<HashMap<(PathBuf, VisualKind), ShownVisual>>,
     visual_tasks: Mutex<HashMap<(PathBuf, VisualKind), tauri::async_runtime::JoinHandle<()>>>,
+    overviews: Mutex<HashMap<PathBuf, OverviewState>>,
+    /// Facts by repository, read again when HEAD moves.
+    facts: Mutex<HashMap<PathBuf, Facts>>,
+    overview_tasks: Mutex<HashMap<PathBuf, tauri::async_runtime::JoinHandle<()>>>,
     /// Which repository each window shows, by window label.
     window_roots: Mutex<HashMap<String, PathBuf>>,
     /// The repository window focused last; the tray offers to review it.
@@ -937,6 +943,218 @@ fn print_window(window: WebviewWindow) -> CmdResult<()> {
     window.print().map_err(|e| GitError::new(e.to_string()))
 }
 
+// MARK: Commands: overview
+
+fn set_overview(app: &AppHandle, root: &Path, state: OverviewState) {
+    app.state::<AppState>()
+        .overviews
+        .lock()
+        .unwrap()
+        .insert(root.to_path_buf(), state);
+    let _ = app.emit("overview-updated", root.to_string_lossy());
+}
+
+/// The one running or shown this session, else the newest saved.
+async fn overview_state_for(app: &AppHandle, root: &Path) -> OverviewState {
+    if let Some(state) = app.state::<AppState>().overviews.lock().unwrap().get(root) {
+        return state.clone();
+    }
+    let state = match Repo::new(root).git_dir().await {
+        Ok(dir) => overview::latest(&dir).map_or(OverviewState::Idle, |overview| {
+            OverviewState::Done { overview }
+        }),
+        Err(_) => OverviewState::Idle,
+    };
+    app.state::<AppState>()
+        .overviews
+        .lock()
+        .unwrap()
+        .entry(root.to_path_buf())
+        .or_insert_with(|| state.clone());
+    state
+}
+
+fn shown_overview(state: OverviewState) -> Option<Overview> {
+    match state {
+        OverviewState::Done { overview } => Some(overview),
+        OverviewState::Running { previous, .. } | OverviewState::Failed { previous, .. } => {
+            previous
+        }
+        OverviewState::Idle => None,
+    }
+}
+
+#[tauri::command]
+async fn overview_facts(app: AppHandle, root: String) -> CmdResult<Facts> {
+    let root = PathBuf::from(root);
+    let repo = Repo::new(&root);
+    let head = repo.head().await;
+    if let Some(facts) = app.state::<AppState>().facts.lock().unwrap().get(&root) {
+        if facts.head_sha == head && head.is_some() {
+            return Ok(facts.clone());
+        }
+    }
+    let facts = overview::facts(&repo).await?;
+    app.state::<AppState>()
+        .facts
+        .lock()
+        .unwrap()
+        .insert(root, facts.clone());
+    Ok(facts)
+}
+
+#[tauri::command]
+async fn overview_state(app: AppHandle, root: String) -> OverviewState {
+    overview_state_for(&app, Path::new(&root)).await
+}
+
+/// How far the shown overview is behind HEAD; none before the first one is written.
+#[tauri::command]
+async fn overview_drift(app: AppHandle, root: String) -> Option<Drift> {
+    let root = PathBuf::from(root);
+    let shown = shown_overview(overview_state_for(&app, &root).await)?;
+    Some(overview::drift(&Repo::new(&root), &shown).await)
+}
+
+#[tauri::command]
+async fn overview_history(root: String) -> Vec<OverviewSummary> {
+    match Repo::new(Path::new(&root)).git_dir().await {
+        Ok(dir) => overview::history(&dir),
+        Err(_) => vec![],
+    }
+}
+
+#[tauri::command]
+async fn open_overview(app: AppHandle, root: String, id: String) -> CmdResult<()> {
+    let root = PathBuf::from(root);
+    let dir = Repo::new(&root).git_dir().await?;
+    let overview = overview::load(&dir, &id).ok_or_else(|| GitError::new("That one is gone."))?;
+    set_overview(&app, &root, OverviewState::Done { overview });
+    Ok(())
+}
+
+/// Writes the overview with the configured AI or `provider`; with `sections`, rewrites only
+/// those of the one shown and keeps the rest.
+#[tauri::command]
+async fn start_overview(
+    app: AppHandle,
+    root: String,
+    sections: Option<Vec<String>>,
+    provider: Option<Provider>,
+) -> CmdResult<()> {
+    let root = PathBuf::from(root);
+    let mut config = app.state::<PrefsStore>().ai();
+    if let Some(provider) = provider {
+        if provider != config.provider {
+            config.provider = provider;
+            config.model.clear();
+        }
+    }
+    let current = overview_state_for(&app, &root).await;
+    if matches!(current, OverviewState::Running { .. }) {
+        return Ok(());
+    }
+    let previous = shown_overview(current);
+    let only = if previous.is_some() {
+        sections.unwrap_or_default()
+    } else {
+        vec![]
+    };
+    let facts = match overview::facts(&Repo::new(&root)).await {
+        Ok(facts) => facts,
+        Err(e) => {
+            set_overview(
+                &app,
+                &root,
+                OverviewState::Failed {
+                    provider: config.provider,
+                    message: e.message.clone(),
+                    previous,
+                },
+            );
+            return Err(e);
+        }
+    };
+    set_overview(
+        &app,
+        &root,
+        OverviewState::Running {
+            provider: config.provider,
+            started_at: review::now_secs(),
+            sections: only.clone(),
+            previous: previous.clone(),
+        },
+    );
+
+    let handle = app.clone();
+    let task_root = root.clone();
+    let task = tauri::async_runtime::spawn(async move {
+        let state = match overview::run(&config, &task_root, &facts, previous.as_ref(), &only).await
+        {
+            Ok(overview) => {
+                if let Ok(dir) = Repo::new(&task_root).git_dir().await {
+                    overview::save(&dir, &overview);
+                }
+                OverviewState::Done { overview }
+            }
+            Err(e) => OverviewState::Failed {
+                provider: config.provider,
+                message: e.message,
+                previous,
+            },
+        };
+        handle
+            .state::<AppState>()
+            .overview_tasks
+            .lock()
+            .unwrap()
+            .remove(&task_root);
+        notify_overview(&handle, &task_root, &state);
+        set_overview(&handle, &task_root, state);
+    });
+    app.state::<AppState>()
+        .overview_tasks
+        .lock()
+        .unwrap()
+        .insert(root, task);
+    Ok(())
+}
+
+#[tauri::command]
+async fn cancel_overview(app: AppHandle, root: String) {
+    let root = PathBuf::from(root);
+    // Dropping the task kills the agent process (kill_on_drop).
+    if let Some(task) = app
+        .state::<AppState>()
+        .overview_tasks
+        .lock()
+        .unwrap()
+        .remove(&root)
+    {
+        task.abort();
+    }
+    let state = app
+        .state::<AppState>()
+        .overviews
+        .lock()
+        .unwrap()
+        .remove(&root);
+    let restored = match state {
+        Some(OverviewState::Running { previous, .. }) => {
+            previous.map(|overview| OverviewState::Done { overview })
+        }
+        other => other,
+    };
+    if let Some(restored) = restored {
+        app.state::<AppState>()
+            .overviews
+            .lock()
+            .unwrap()
+            .insert(root.clone(), restored);
+    }
+    let _ = app.emit("overview-updated", root.to_string_lossy());
+}
+
 // MARK: Commands: notifications
 
 fn repo_name(root: &Path) -> String {
@@ -987,6 +1205,18 @@ fn notify_visual(app: &AppHandle, root: &Path, state: &VisualState) {
             },
             first_line(message),
         ),
+        _ => return,
+    };
+    notify::finished(app, root, &title, &body);
+}
+
+fn notify_overview(app: &AppHandle, root: &Path, state: &OverviewState) {
+    let (title, body) = match state {
+        OverviewState::Done { .. } => (
+            format!("Overview of {} is ready", repo_name(root)),
+            "Open the Overview tab to read it.".to_string(),
+        ),
+        OverviewState::Failed { message, .. } => ("Overview failed".into(), first_line(message)),
         _ => return,
     };
     notify::finished(app, root, &title, &body);
@@ -1236,6 +1466,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         "View",
         true,
         &[
+            &item("view-overview", "Overview", Some("CmdOrCtrl+0"))?,
             &item("view-changes", "Changes", Some("CmdOrCtrl+1"))?,
             &item("view-history", "History", Some("CmdOrCtrl+2"))?,
             &item("view-review", "Review", Some("CmdOrCtrl+3"))?,
@@ -1376,6 +1607,13 @@ pub fn run() {
             open_visual,
             start_visual,
             cancel_visual,
+            overview_facts,
+            overview_state,
+            overview_drift,
+            overview_history,
+            open_overview,
+            start_overview,
+            cancel_overview,
             export_visual,
             print_window,
             notify_prefs,
