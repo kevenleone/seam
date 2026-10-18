@@ -2,6 +2,8 @@ import { graphlib, layout } from '@dagrejs/dagre';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 
+export { default as SKETCH_CSS } from './sketch.css?raw';
+
 import type { VisualBlock, VisualCanvas, VisualChange, VisualDiagram, VisualScreen } from './types';
 
 // MARK: Sanitising
@@ -93,6 +95,12 @@ const SKETCH_CONFIG = {
     ],
 };
 
+export interface Surface {
+    chrome: 'dialog' | 'none' | 'phone' | 'window';
+    height: number;
+    width: number;
+}
+
 export function inlineHtml(text: string): string {
     return DOMPurify.sanitize(marked.parseInline(text, { async: false, gfm: true }), {
         FORBID_TAGS: ['form', 'iframe', 'img', 'style'],
@@ -133,6 +141,8 @@ export function sketchHtml(screen: VisualScreen, canvas: VisualCanvas): string {
     return holder.innerHTML;
 }
 
+// MARK: Canvas layout
+
 /** The same markup as XHTML, which an SVG `foreignObject` needs. */
 export function sketchXhtml(screen: VisualScreen, canvas: VisualCanvas): string {
     const holder = document.createElement('div');
@@ -142,81 +152,6 @@ export function sketchXhtml(screen: VisualScreen, canvas: VisualCanvas): string 
     return [...holder.childNodes]
         .map((node) => new XMLSerializer().serializeToString(node))
         .join('');
-}
-
-// MARK: Wireframe sheet
-
-/**
- * Scoped to `.wf-root`, so it reads the same in the app, a print, an exported page and
- * an Excalidraw image. The `--wf-*` colours come from the theme's tokens.
- */
-export const SKETCH_CSS = `
-.wf-root {
-    --wf-ink: var(--fg-soft);
-    --wf-line: var(--muted);
-    --wf-fill: var(--app);
-    --wf-panel: var(--panel);
-    --wf-soft: var(--control-line);
-    --wf-accent: var(--accent);
-    --wf-on-accent: var(--on-accent);
-    --wf-mark: var(--add);
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    width: 100%;
-    height: 100%;
-    overflow: hidden;
-    padding: 14px;
-    background: var(--wf-fill);
-    color: var(--wf-ink);
-    font-family: 'Patrick Hand', 'Comic Sans MS', cursive;
-    font-size: 15px;
-    line-height: 1.3;
-    text-align: left;
-    pointer-events: none;
-}
-.wf-root * { box-sizing: border-box; }
-.wf-root h1, .wf-root h2, .wf-root h3, .wf-root h4, .wf-root p { margin: 0; font-weight: normal; }
-.wf-root h1, .wf-root .wf-title { font-size: 23px; }
-.wf-root h2 { font-size: 19px; }
-.wf-root h3, .wf-root h4 { font-size: 16px; }
-.wf-root ul, .wf-root ol { margin: 0; padding-left: 18px; }
-.wf-root .wf-row { display: flex; gap: 10px; align-items: center; }
-.wf-root .wf-col { display: flex; flex-direction: column; gap: 8px; }
-.wf-root .wf-sidebar { display: flex; flex-direction: column; gap: 8px; width: 28%; flex: none; align-self: stretch; padding-right: 10px; border-right: 1.5px solid var(--wf-line); }
-.wf-root .wf-nav { display: flex; gap: 12px; align-items: center; padding-bottom: 8px; border-bottom: 1.5px solid var(--wf-line); }
-.wf-root .wf-card { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1.5px solid var(--wf-line); border-radius: 11px 8px 12px 7px; background: var(--wf-panel); }
-.wf-root .wf-muted { color: var(--wf-line); font-size: 13px; }
-.wf-root .wf-line { display: block; width: 70%; min-width: 40px; height: 8px; flex: none; border-radius: 4px; background: var(--wf-soft); }
-.wf-root .wf-button, .wf-root button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 3px 12px; border: 1.5px solid var(--wf-ink); border-radius: 8px 6px 9px 7px; background: transparent; color: var(--wf-ink); font: inherit; white-space: nowrap; }
-.wf-root .wf-button.primary, .wf-root button.primary { border-color: var(--wf-accent); background: var(--wf-accent); color: var(--wf-on-accent); }
-.wf-root .wf-input, .wf-root input, .wf-root textarea, .wf-root .wf-select, .wf-root select { display: block; width: 100%; min-height: 28px; padding: 3px 8px; border: 1.5px solid var(--wf-line); border-radius: 6px 5px 7px 5px; background: var(--wf-fill); color: var(--wf-ink); font: inherit; }
-.wf-root .wf-select::after { content: '▾'; float: right; color: var(--wf-line); }
-.wf-root .wf-checkbox { display: inline-block; width: 15px; height: 15px; flex: none; border: 1.5px solid var(--wf-ink); border-radius: 3px; }
-.wf-root .wf-checkbox.on { border-color: var(--wf-accent); background: var(--wf-accent); }
-.wf-root .wf-toggle { position: relative; display: inline-block; width: 32px; height: 18px; flex: none; border: 1.5px solid var(--wf-ink); border-radius: 999px; }
-.wf-root .wf-toggle::after { content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: var(--wf-ink); }
-.wf-root .wf-toggle.on { border-color: var(--wf-accent); background: var(--wf-accent); }
-.wf-root .wf-toggle.on::after { left: 16px; background: var(--wf-on-accent); }
-.wf-root .wf-chip { display: inline-flex; align-items: center; padding: 1px 10px; border: 1.5px solid var(--wf-line); border-radius: 999px; font-size: 13px; }
-.wf-root .wf-badge { display: inline-flex; align-items: center; padding: 0 8px; border: 1.5px solid var(--wf-mark); border-radius: 999px; color: var(--wf-mark); font-size: 12px; }
-.wf-root .wf-list { display: flex; flex-direction: column; }
-.wf-root .wf-item { display: flex; gap: 10px; align-items: center; padding: 7px 0; border-bottom: 1px solid var(--wf-soft); }
-.wf-root .wf-avatar { display: inline-block; width: 26px; height: 26px; flex: none; border: 1.5px solid var(--wf-line); border-radius: 50%; }
-.wf-root .wf-image { min-height: 64px; border: 1.5px solid var(--wf-line); border-radius: 6px; background: repeating-linear-gradient(135deg, transparent 0 9px, var(--wf-soft) 9px 10px); }
-.wf-root .wf-divider, .wf-root hr { width: 100%; height: 0; margin: 2px 0; border: 0; border-top: 1.5px solid var(--wf-line); }
-.wf-root .wf-changed { outline: 2px dashed var(--wf-mark); outline-offset: 3px; border-radius: 6px; }
-.wf-root [data-pin] { position: relative; }
-.wf-root .wf-pin { position: absolute; top: -11px; left: -11px; z-index: 2; display: flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--wf-mark); color: var(--on-accent); font: 600 12px/1 system-ui, sans-serif; box-shadow: 0 0 0 3px var(--add-bg); }
-`;
-
-// MARK: Canvas layout
-
-export interface Surface {
-    chrome: 'dialog' | 'none' | 'phone' | 'window';
-    height: number;
-    width: number;
 }
 
 const SURFACES: Record<string, Surface> = {
@@ -573,16 +508,3 @@ export const CHANGE_LABELS: Record<Exclude<VisualChange, ''>, string> = {
     removed: 'Removed',
     renamed: 'Renamed',
 };
-
-/** Adds the wireframe sheet to the document once; an export copies it with the rest. */
-export function installSketchStyle(): void {
-    if (document.getElementById('wf-sketch')) {
-        return;
-    }
-
-    const style = document.createElement('style');
-
-    style.id = 'wf-sketch';
-    style.textContent = SKETCH_CSS;
-    document.head.append(style);
-}
