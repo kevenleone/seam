@@ -105,6 +105,15 @@ blocks naming a file outside it are dropped. Recaps and plans are kept in
 (`src/lib/visualExport.ts`). `SEAM_LIVE_AI=claude cargo test --test visual -- --ignored`
 runs both kinds live; `SEAM_LIVE_OUT=<dir>` keeps the JSON they produced.
 
+`src/overview.rs` is the Overview tab. Its facts (stack, languages, activity,
+hot paths, scripts) come from git and the manifests with no AI, so the tab is
+never empty. The AI overview is three fixed sections (architecture, modules,
+where to start) of Visual's blocks, grounded in `git ls-files`. Each section
+lists the paths it covers and the overview keeps the commit it was written at,
+so drift is a `git diff --name-only` away and an update rewrites only the
+sections it touches. Overviews are kept in `.git/seam/overviews/`.
+`SEAM_LIVE_AI=claude cargo test --test overview -- --ignored` writes one live.
+
 `src/tray.rs` is the menu bar icon (recent projects, review the last-focused
 repository) and `src/prefs.rs` what the host remembers in the app data folder
 (the AI configuration and recent repositories). The host owns both because the
