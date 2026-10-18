@@ -377,7 +377,7 @@ pub async fn plan_scope(repo: &Repo) -> Result<Scope> {
 }
 
 /// What an API model is told about the repository, since it cannot open it.
-async fn repository_context(repo: &Repo, root: &Path) -> String {
+pub(crate) async fn repository_context(repo: &Repo, root: &Path) -> String {
     let files = repo
         .run(&["ls-files"])
         .await
@@ -615,6 +615,26 @@ fn tidy_canvas(canvas: &mut Canvas) {
     }
 }
 
+/// One node per id, a label on each, and only the edges joining two of them.
+pub(crate) fn tidy_diagram(diagram: &mut DiagramBlock) {
+    let mut ids = HashSet::new();
+    diagram
+        .nodes
+        .retain(|node| !node.id.trim().is_empty() && ids.insert(node.id.clone()));
+    for node in &mut diagram.nodes {
+        node.change = normalized_change(&node.change);
+        if node.label.trim().is_empty() {
+            node.label = node.id.clone();
+        }
+    }
+    diagram
+        .edges
+        .retain(|edge| ids.contains(&edge.from) && ids.contains(&edge.to));
+    for edge in &mut diagram.edges {
+        edge.change = normalized_change(&edge.change);
+    }
+}
+
 /// Keeps what the model got right and grounds the rest in the diff: file stats come from
 /// git, diff blocks must name a changed file, and references must point at something.
 fn tidy_blocks(
@@ -633,22 +653,7 @@ fn tidy_blocks(
         let keep = match block {
             Block::Text(text) => (!text.markdown.trim().is_empty()).then_some(Block::Text(text)),
             Block::Diagram(mut diagram) => {
-                let mut ids = HashSet::new();
-                diagram
-                    .nodes
-                    .retain(|node| !node.id.trim().is_empty() && ids.insert(node.id.clone()));
-                for node in &mut diagram.nodes {
-                    node.change = normalized_change(&node.change);
-                    if node.label.trim().is_empty() {
-                        node.label = node.id.clone();
-                    }
-                }
-                diagram
-                    .edges
-                    .retain(|edge| ids.contains(&edge.from) && ids.contains(&edge.to));
-                for edge in &mut diagram.edges {
-                    edge.change = normalized_change(&edge.change);
-                }
+                tidy_diagram(&mut diagram);
                 (!diagram.nodes.is_empty()).then_some(Block::Diagram(diagram))
             }
             Block::Compare(mut compare) => {
@@ -759,7 +764,7 @@ fn parse_answer(
 }
 
 /// Why the JSON object in an answer doesn't parse, when the answer holds one at all.
-fn json_problem(answer: &str) -> Option<String> {
+pub(crate) fn json_problem(answer: &str) -> Option<String> {
     let cleaned = ai::strip_ansi(answer);
     let (start, end) = (cleaned.find('{')?, cleaned.rfind('}')?);
     if end <= start {
@@ -770,7 +775,7 @@ fn json_problem(answer: &str) -> Option<String> {
         .map(|error| error.to_string())
 }
 
-fn repair_prompt(answer: &str, problem: &str) -> String {
+pub(crate) fn repair_prompt(answer: &str, problem: &str) -> String {
     format!(
         "This JSON object does not parse ({problem}). Return the same object, corrected to valid JSON: escape quotes and newlines inside strings, and change nothing else. Answer with ONLY the JSON object, no prose and no code fence. Do not read or change any file.\n\n{answer}"
     )
