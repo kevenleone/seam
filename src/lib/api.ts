@@ -7,11 +7,15 @@ import type {
     Commit,
     Detail,
     DiffSource,
+    Drift,
+    Facts,
     FileDiff,
     HistoryMeta,
     NotifyPrefs,
     Op,
     Outcome,
+    OverviewState,
+    OverviewSummary,
     Provider,
     ProviderStatus,
     ReviewState,
@@ -32,6 +36,7 @@ export const api = {
     /** A blob's bytes; `path` lets an unwritten working-tree side be read from disk. */
     blob: (root: string, object: string, path: null | string) =>
         invoke<ArrayBuffer>('blob', { object, path, root }),
+    cancelOverview: (root: string) => invoke<void>('cancel_overview', { root }),
     cancelReview: (root: string) => invoke<void>('cancel_review', { root }),
     cancelVisual: (root: string, kind: VisualKind) => invoke<void>('cancel_visual', { kind, root }),
     clearAiKey: (provider: Provider) => invoke<void>('clear_ai_key', { provider }),
@@ -57,12 +62,18 @@ export const api = {
         invoke<null | string>('merge_base', { a: first, b: second, root }),
     notifyPrefs: () => invoke<NotifyPrefs>('notify_prefs'),
     openFolderDialog: () => invoke<void>('open_folder_dialog'),
+    openOverview: (root: string, id: string) => invoke<void>('open_overview', { id, root }),
     openRepository: (path: string, tab?: Tab) =>
         invoke<void>('open_repository', { path, tab: tab ?? null }),
     openSettingsWindow: (pane: null | string) => invoke<void>('open_settings_window', { pane }),
     openVisual: (root: string, kind: VisualKind, id: string) =>
         invoke<void>('open_visual', { id, kind, root }),
     openWelcome: () => invoke<void>('open_welcome'),
+    /** `null` before the first overview is written. */
+    overviewDrift: (root: string) => invoke<Drift | null>('overview_drift', { root }),
+    overviewFacts: (root: string) => invoke<Facts>('overview_facts', { root }),
+    overviewHistory: (root: string) => invoke<OverviewSummary[]>('overview_history', { root }),
+    overviewState: (root: string) => invoke<OverviewState>('overview_state', { root }),
     perform: (root: string, op: Op) => invoke<Outcome>('perform', { op, root }),
     playSound: (sound: string) => invoke<void>('play_sound', { sound }),
     printWindow: () => invoke<void>('print_window'),
@@ -80,6 +91,9 @@ export const api = {
     setNotifyPrefs: (notify: NotifyPrefs) => invoke<void>('set_notify_prefs', { notify }),
     snapshot: (root: string) => invoke<Snapshot>('snapshot', { root }),
     sounds: () => invoke<string[]>('sounds'),
+    /** With `sections`, rewrites only those of the overview shown. */
+    startOverview: (root: string, sections: null | string[], provider: null | Provider) =>
+        invoke<void>('start_overview', { provider, root, sections }),
     startReview: (root: string, provider: null | Provider) =>
         invoke<void>('start_review', { provider, root }),
     startVisual: (

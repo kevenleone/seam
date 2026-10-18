@@ -25,7 +25,10 @@ import { ChangesView } from './ChangesView';
 import { HistoryView } from './HistoryView';
 import { ReviewView } from './ReviewView';
 
-// Its diagrams, markdown and sanitiser load the first time the tab opens.
+// Their diagrams, markdown and sanitiser load the first time either tab opens.
+const OverviewView = lazy(() =>
+    import('./OverviewView').then((module) => ({ default: module.OverviewView })),
+);
 const VisualView = lazy(() =>
     import('./VisualView').then((module) => ({ default: module.VisualView })),
 );
@@ -44,12 +47,12 @@ export function RepoWindow({ root }: { root: string }) {
 
         // The tray opens a window straight onto its review with ?tab=review.
         const initialTab = new URLSearchParams(location.search).get('tab');
+        const tabs: Tab[] = ['changes', 'history', 'overview', 'review', 'visual'];
 
-        if (initialTab === 'review' || initialTab === 'history' || initialTab === 'visual') {
-            useRepo.getState().set({ tab: initialTab });
-        }
-
-        void useRepo.getState().init(root);
+        void useRepo.getState().init(
+            root,
+            tabs.find((candidate) => candidate === initialTab),
+        );
         void api.watch(root);
 
         const win = getCurrentWebviewWindow();
@@ -65,6 +68,7 @@ export function RepoWindow({ root }: { root: string }) {
 
                 if (event.payload.refs) {
                     void s.refreshHistory();
+                    void s.loadOverview();
                 }
             }),
             win.listen<string>('git-progress', (event) =>
@@ -75,6 +79,11 @@ export function RepoWindow({ root }: { root: string }) {
             listen<string>('review-updated', (event) => {
                 if (event.payload === root) {
                     void useRepo.getState().loadReview();
+                }
+            }),
+            listen<string>('overview-updated', (event) => {
+                if (event.payload === root) {
+                    void useRepo.getState().loadOverview();
                 }
             }),
             listen<string>('visual-updated', (event) => {
@@ -145,7 +154,11 @@ export function RepoWindow({ root }: { root: string }) {
             <Header />
             <Banners />
             <main className="flex min-h-0 flex-1">
-                {tab === 'changes' ? (
+                {tab === 'overview' ? (
+                    <Suspense fallback={null}>
+                        <OverviewView />
+                    </Suspense>
+                ) : tab === 'changes' ? (
                     <ChangesView />
                 ) : tab === 'history' ? (
                     <HistoryView />
@@ -275,7 +288,7 @@ function Header() {
                 aria-label="Views"
                 className="flex shrink-0 gap-0.5 rounded-[7px] border border-control-line bg-control p-0.5"
             >
-                {(['changes', 'history', 'review', 'visual'] as const).map((option) => (
+                {(['overview', 'changes', 'history', 'review', 'visual'] as const).map((option) => (
                     <button
                         aria-current={s.tab === option ? 'page' : undefined}
                         className={`rounded-[5px] px-2.5 py-1 ${s.tab === option ? 'bg-tab text-fg' : 'text-muted hover:text-fg'}`}
@@ -287,6 +300,7 @@ function Header() {
                             {
                                 changes: 'Changes',
                                 history: 'History',
+                                overview: 'Overview',
                                 review: 'Review',
                                 visual: 'Visual',
                             }[option]
@@ -295,6 +309,7 @@ function Header() {
                             <span className="ml-1.5 text-accent">{count}</span>
                         )}
                         {option === 'review' && <ReviewBadge />}
+                        {option === 'overview' && <OverviewBadge />}
                         {option === 'visual' && <VisualBadge />}
                     </button>
                 ))}
@@ -389,11 +404,35 @@ function onMenu(id: string) {
             return s.set({ tab: 'changes' });
         case 'view-history':
             return s.set({ tab: 'history' });
+        case 'view-overview':
+            return s.set({ tab: 'overview' });
         case 'view-review':
             return s.set({ tab: 'review' });
         case 'view-visual':
             return s.set({ tab: 'visual' });
     }
+}
+
+/** A pulsing dot while the overview is written, then a dot while it is out of date. */
+function OverviewBadge() {
+    const running = useRepo((state) => state.overview.status === 'running');
+    const drifted = useRepo((state) => !!state.drift?.sections.length);
+
+    if (running) {
+        return (
+            <span
+                aria-label="Overview being written"
+                className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent align-[2px]"
+            />
+        );
+    }
+
+    return drifted ? (
+        <span
+            aria-label="Overview out of date"
+            className="ml-1.5 inline-block h-1.5 w-1.5 rounded-full bg-del align-[2px]"
+        />
+    ) : null;
 }
 
 function PanelToggle({ side }: { side: 'left' | 'right' }) {
