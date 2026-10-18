@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import type { ChangeKind, FileChange } from '../lib/types';
 
+import { CleanTree } from '../components/CleanTree';
 import { type DiffInteraction, DiffView } from '../components/DiffView';
 import { ExpandButton } from '../components/ExpandButton';
 import { Icon } from '../components/Icon';
@@ -232,6 +233,17 @@ function DiffPane() {
     const { applyLines, diff, lineSelection, loadDiff, perform, root, selected, set, toggleLine } =
         useRepo();
     const { ignoreWhitespace, splitDiff } = useSettings();
+    const isClean = useRepo(
+        (state) =>
+            !state.status.staged.length &&
+            !state.status.unstaged.length &&
+            !state.status.untracked.length &&
+            !state.status.conflicted.length,
+    );
+
+    if (!selected && isClean) {
+        return <CleanTree />;
+    }
 
     if (!selected) {
         return (
@@ -357,7 +369,7 @@ function DiffPane() {
 }
 
 function FileList() {
-    const { perform, select, selected, set, status } = useRepo();
+    const { meta, perform, select, selected, set, status } = useRepo();
     const [menu, setMenu] = useState<{ change: FileChange; x: number; y: number } | null>(null);
     const unstaged = [...status.unstaged, ...status.untracked];
     const isClean = !status.staged.length && !unstaged.length && !status.conflicted.length;
@@ -463,13 +475,41 @@ function FileList() {
                     run: () => perform({ type: 'stageAll' }, 'Staging'),
                 })}
                 {isClean && (
-                    <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center text-muted">
-                        <Icon className="text-accent" name="check" size={22} />
-                        <span className="font-semibold text-fg">No changes</span>
-                        <span className="text-[12px]">
-                            Edit files in this folder and they show up here.
+                    <div className="flex flex-col gap-1.5 px-2 pt-1">
+                        <span className="flex items-center gap-2 font-semibold">
+                            <Icon className="text-accent" name="check" size={15} />
+                            Working tree clean
+                        </span>
+                        <span className="text-[12px] leading-normal text-muted">
+                            Edits in this folder show up here as you save them.
                         </span>
                     </div>
+                )}
+                {isClean && meta.stashes.length > 0 && (
+                    <section className="flex flex-col gap-0.5">
+                        <SectionLabel className="px-2 pb-1.5">
+                            Stashes · {meta.stashes.length}
+                        </SectionLabel>
+                        {meta.stashes.map((stash) => (
+                            <button
+                                className="flex items-center gap-2 rounded-md px-2 py-1.5 text-left hover:bg-hover"
+                                key={stash.sha}
+                                onClick={() =>
+                                    perform(
+                                        { pop: false, stash, type: 'stashApply' },
+                                        'Applying stash',
+                                    )
+                                }
+                                title="Apply this stash"
+                                type="button"
+                            >
+                                <span className="min-w-0 flex-1 truncate">{stash.message}</span>
+                                <span className="shrink-0 text-[12px] text-dim">
+                                    {relativeTime(stash.date)}
+                                </span>
+                            </button>
+                        ))}
+                    </section>
                 )}
             </div>
             {!isClean && (
