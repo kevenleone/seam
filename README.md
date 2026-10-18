@@ -7,6 +7,10 @@ lines, commit, stash, rename or remove commits, and undo any of it with ⌘Z.
 
 [Website](https://kevenleone.github.io/seam/) · [Download](https://github.com/kevenleone/seam/releases/latest)
 
+- **Overview**: what the project is, the first thing you see when there is nothing to commit:
+  its stack, languages, activity, where work happens and how to run it, read straight from git
+  and the manifests. Ask the AI to add its purpose, an architecture diagram, what lives where and
+  where to start reading; when new commits touch a part of it, update just that part.
 - **Changes**: stage, unstage or discard single lines and hunks; commit or amend. Diffs are
   syntax highlighted for the common languages, in every theme.
 - **History**: ⌘/⇧-click commits to squash, remove, cherry-pick or see their combined diff;
