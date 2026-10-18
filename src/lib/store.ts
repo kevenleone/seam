@@ -4,6 +4,8 @@ import { create } from 'zustand';
 import type {
     Commit,
     Detail,
+    Drift,
+    Facts,
     FileChange,
     FileDiff,
     Finding,
@@ -11,6 +13,8 @@ import type {
     InProgress,
     LineAction,
     Op,
+    OverviewState,
+    OverviewSummary,
     Provider,
     RepoStatus,
     ReviewState,
@@ -49,7 +53,7 @@ export type Sheet =
     | { kind: 'squash'; shas: string[] }
     | { kind: 'stash'; paths: string[] };
 
-export type Tab = 'changes' | 'history' | 'review' | 'visual';
+export type Tab = 'changes' | 'history' | 'overview' | 'review' | 'visual';
 
 export interface Toast {
     id: number;
@@ -71,19 +75,25 @@ export type RepoStore = Actions & State;
 
 interface Actions {
     applyLines(action: LineAction, hunks?: number[]): void;
+    cancelOverview(): void;
     cancelReview(): void;
     cancelVisual(kind: VisualKind): void;
     commit(andPush?: boolean): void;
     dismissFinding(id: number): void;
     fetch(): void;
     focusFinding(finding: Finding): void;
-    init(root: string): Promise<void>;
+    /** Opens on `tab`, else on Overview when there is nothing to commit and Changes when there is. */
+    init(root: string, tab?: Tab): Promise<void>;
     loadDiff(): Promise<void>;
     loadMore(): Promise<void>;
+    /** The facts, the overview shown and how far it is behind HEAD. */
+    loadOverview(): Promise<void>;
     loadReview(): Promise<void>;
     loadVisuals(): Promise<void>;
     /** A toast with no undo. */
     notify(message: string): void;
+    /** Shows a saved overview. */
+    openOverview(id: string): void;
     /** Shows a saved recap or plan, from any branch, until the branch changes. */
     openVisual(kind: VisualKind, id: string): void;
     /** Opens another worktree's window, closing this one when Settings say so. */
@@ -101,6 +111,8 @@ interface Actions {
     /** Ticks commits in History; two or more show their combined diff. */
     setChecked(shas: string[]): void;
     showDetail(detail: HistoryDetail | null): void;
+    /** Writes the overview, or rewrites only `sections` of the one shown. */
+    startOverview(sections?: string[], provider?: Provider): void;
     /** Starts an AI review of the current branch with `provider`, or the one chosen in Settings. */
     startReview(provider?: Provider): void;
     /** Starts a visual recap of the branch, or a plan of the change `prompt` describes. */
@@ -124,9 +136,11 @@ interface State {
     diff: FileDiff | null;
     /** Findings hidden in this window, by id, for the review being shown. */
     dismissed: number[];
+    drift: Drift | null;
     error: null | string;
     /** Everything but the diff slides away (⇧⌘E, esc to come back). */
     expanded: boolean;
+    facts: Facts | null;
     hasMore: boolean;
     historyRef: string;
     inProgress: InProgress | null;
@@ -136,6 +150,8 @@ interface State {
     /** The main checkout, when this window shows a linked worktree of it. */
     mainWorktree: null | string;
     meta: HistoryMeta;
+    overview: OverviewState;
+    overviews: OverviewSummary[];
     palette: boolean;
     picker: null | Picker;
 
@@ -241,6 +257,9 @@ export const useRepo = create<RepoStore>()((set, get) => {
         baseCommit: null,
         body: '',
         busy: null,
+        cancelOverview() {
+            void api.cancelOverview(get().root);
+        },
         cancelReview() {
             void api.cancelReview(get().root);
         },
@@ -273,12 +292,14 @@ export const useRepo = create<RepoStore>()((set, get) => {
         detailData: null,
         diff: null,
         dismissed: [],
-
         dismissFinding(id) {
             set({ dismissed: [...get().dismissed, id] });
         },
+
+        drift: null,
         error: null,
         expanded: false,
+        facts: null,
         fetch() {
             get().perform({ type: 'fetch' }, 'Fetching');
         },
@@ -291,11 +312,12 @@ export const useRepo = create<RepoStore>()((set, get) => {
 
         historyRef: 'HEAD',
 
-        async init(root) {
+        async init(root, tab) {
             set({ root });
             await get().refreshStatus();
-            set({ loaded: true });
+            set({ loaded: true, tab: tab ?? (changeCount(get().status) ? 'changes' : 'overview') });
             set({ mainWorktree: await api.mainWorktree(root) });
+            await get().loadOverview();
             await get().refreshHistory();
             await get().loadReview();
             await get().loadVisuals();
@@ -360,6 +382,22 @@ export const useRepo = create<RepoStore>()((set, get) => {
 
             set({ commits: [...commits, ...more], hasMore: more.length === PAGE });
         },
+        async loadOverview() {
+            const root = get().root;
+
+            try {
+                const [facts, overview, overviews, drift] = await Promise.all([
+                    api.overviewFacts(root),
+                    api.overviewState(root),
+                    api.overviewHistory(root),
+                    api.overviewDrift(root),
+                ]);
+
+                set({ drift, facts, overview, overviews });
+            } catch (error) {
+                set({ error: errorMessage(error) });
+            }
+        },
         async loadReview() {
             try {
                 const review = await api.reviewState(get().root);
@@ -396,6 +434,10 @@ export const useRepo = create<RepoStore>()((set, get) => {
         notify(message) {
             showToast(message, false);
         },
+        openOverview(id) {
+            set({ tab: 'overview' });
+            api.openOverview(get().root, id).catch((error) => set({ error: errorMessage(error) }));
+        },
         openVisual(kind, id) {
             set({ tab: 'visual', visualKind: kind });
             api.openVisual(get().root, kind, id).catch((error) =>
@@ -413,6 +455,8 @@ export const useRepo = create<RepoStore>()((set, get) => {
                 (error: unknown) => get().notify(errorMessage(error)),
             );
         },
+        overview: { status: 'idle' },
+        overviews: [],
         palette: false,
 
         perform(op, label) {
@@ -609,6 +653,13 @@ export const useRepo = create<RepoStore>()((set, get) => {
                 .catch((error) => set({ error: errorMessage(error) }));
         },
 
+        startOverview(sections, provider) {
+            set({ tab: 'overview' });
+            // One that can't start is recorded as failed and shown in the Overview tab.
+            api.startOverview(get().root, sections ?? null, provider ?? null).catch(() =>
+                get().loadOverview(),
+            );
+        },
         startReview(provider) {
             set({ tab: 'review' });
             // A review that can't start is recorded as failed and shown in the Review tab.

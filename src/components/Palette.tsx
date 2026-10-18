@@ -375,6 +375,37 @@ function commands(): Command[] {
         title: 'Show visual',
     });
     add({
+        group: 'Overview',
+        hint:
+            s.overview.status === 'running'
+                ? 'running…'
+                : 'purpose, architecture and where to start',
+        id: 'enrich-overview',
+        run: () => s.startOverview(),
+        title:
+            s.overview.status === 'idle'
+                ? 'Write the project overview'
+                : 'Rewrite the whole overview',
+    });
+
+    if (s.drift?.sections.length) {
+        add({
+            group: 'Overview',
+            hint: `${s.drift.commits} commit${s.drift.commits === 1 ? '' : 's'} since it was written`,
+            id: 'update-overview',
+            run: () => s.startOverview(s.drift?.sections),
+            title: 'Update the out-of-date overview sections',
+        });
+    }
+
+    add({
+        group: 'View',
+        id: 'overview',
+        keys: '⌘0',
+        run: () => s.set({ tab: 'overview' }),
+        title: 'Show overview',
+    });
+    add({
         group: 'View',
         id: 'changes',
         keys: '⌘1',

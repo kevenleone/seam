@@ -83,6 +83,32 @@ export interface DiffLine {
 
 export type DiffSource = 'staged' | 'unstaged' | 'untracked';
 
+/** How far HEAD has moved since an overview was written. */
+export interface Drift {
+    commits: number;
+    files: number;
+    /** The commit it was written at is no longer in the repository. */
+    missing: boolean;
+    /** Sections with a changed file under one of their paths. */
+    sections: string[];
+}
+
+/** What Seam reads from git and the manifests, with no AI. */
+export interface Facts {
+    commits: number;
+    contributors: number;
+    description: { source: string; text: string } | null;
+    headSha: null | string;
+    hotPaths: { changes: number; path: string }[];
+    languages: { bytes: number; name: string }[];
+    latestTag: null | string;
+    name: string;
+    scripts: { command: string; name: string; run: string }[];
+    stack: { name: string; source: string; version: null | string }[];
+    /** Commits per week, oldest first, the last one being this week. */
+    weekly: number[];
+}
+
 export interface FileChange {
     area: ChangeArea;
     kind: ChangeKind;
@@ -182,6 +208,52 @@ export type Op =
 export interface Outcome {
     message: string;
     undoable: boolean;
+}
+
+export interface Overview {
+    branch: null | string;
+    createdAt: number;
+    durationMs: number;
+    /** The commit it was written at. */
+    headSha: null | string;
+    id: string;
+    provider: Provider;
+    purpose: string;
+    sections: OverviewSection[];
+}
+
+export interface OverviewSection {
+    blocks: VisualBlock[];
+    id: string;
+    /** The folders (ending in `/`) and files it describes. */
+    paths: string[];
+    title: string;
+}
+
+export type OverviewState =
+    | {
+          message: string;
+          previous: null | Overview;
+          provider: Provider;
+          status: 'failed';
+      }
+    | { overview: Overview; status: 'done' }
+    | {
+          previous: null | Overview;
+          provider: Provider;
+          /** The sections being rewritten; empty when it is the whole overview. */
+          sections: string[];
+          startedAt: number;
+          status: 'running';
+      }
+    | { status: 'idle' };
+
+export interface OverviewSummary {
+    branch: null | string;
+    createdAt: number;
+    headSha: null | string;
+    id: string;
+    purpose: string;
 }
 
 export type Provider =
