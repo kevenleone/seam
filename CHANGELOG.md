@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.6.0](https://github.com/kevenleone/seam/compare/v0.5.0...v0.6.0) (2026-10-18)
+
+
+### Features
+
+* **host:** give reviews, recaps and plans the project's saved overview as context ([fd427a5](https://github.com/kevenleone/seam/commit/fd427a573f662aff2d08e05cea705d556d694ee3))
+* **host:** list worktrees, check out any ref detached and describe each branch's tip ([d098b27](https://github.com/kevenleone/seam/commit/d098b274607fb3b26e562d727af50c44f20af9f5))
+* **host:** read a repository's facts and write an AI overview that updates only the sections that drifted ([e26b29a](https://github.com/kevenleone/seam/commit/e26b29a50dcf72bd139ad4e6d3aed064ef2273f7))
+* **overview:** mark a section out of date only when its paths change enough, and small edits as minor ([c0be825](https://github.com/kevenleone/seam/commit/c0be825434a3c6ff2d679b32ef40578aebe8699b))
+* **ui:** open on an Overview tab with the project's facts, architecture and freshness ([b918de5](https://github.com/kevenleone/seam/commit/b918de5a3f4b7f9719e122b03120fffcca15c6f6))
+* **ui:** pick branches and workspaces from the status bar and header, and label worktree windows ([cca7f46](https://github.com/kevenleone/seam/commit/cca7f46d70e00249361ea58ea55f82b1157a2126))
+
+
+### Refactoring
+
+* **host:** share Visual's diagram tidying, repository context and JSON repair ([522aa45](https://github.com/kevenleone/seam/commit/522aa45b08dc05a62e8c41f1ce6550e14269b5a2))
+
+
+### Documentation
+
+* describe how the overview measures drift and feeds other features ([e999325](https://github.com/kevenleone/seam/commit/e999325b6539aa43eca5c5f72e976f6c62a8793e))
+* describe the Overview tab ([7ec28c4](https://github.com/kevenleone/seam/commit/7ec28c40d5d9c3f84b832084b858a18fa176f48e))
+
 ## [0.5.0](https://github.com/kevenleone/seam/compare/v0.4.0...v0.5.0) (2026-10-18)
 
 
