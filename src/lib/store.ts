@@ -1,3 +1,4 @@
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { create } from 'zustand';
 
 import type {
@@ -26,6 +27,8 @@ export type HistoryDetail =
     | { kind: 'combined'; shas: string[] }
     | { kind: 'commit'; sha: string }
     | { kind: 'stash'; stash: Stash };
+
+export type Picker = 'branch' | 'branchDetached' | 'branchFrom' | 'workspace';
 
 /** A finding the diff should scroll to; `nonce` re-triggers the same one. */
 export interface ReviewFocus {
@@ -83,6 +86,8 @@ interface Actions {
     notify(message: string): void;
     /** Shows a saved recap or plan, from any branch, until the branch changes. */
     openVisual(kind: VisualKind, id: string): void;
+    /** Opens another worktree's window, closing this one when Settings say so. */
+    openWorktree(path: string, tab?: Tab): void;
     perform(op: Op, label: string): void;
     pull(): void;
     push(force?: boolean): void;
@@ -128,8 +133,11 @@ interface State {
     lastCommit: Commit | null;
     lineSelection: Record<number, number[]>;
     loaded: boolean;
+    /** The main checkout, when this window shows a linked worktree of it. */
+    mainWorktree: null | string;
     meta: HistoryMeta;
     palette: boolean;
+    picker: null | Picker;
 
     plan: VisualState;
     plans: VisualSummary[];
@@ -287,6 +295,7 @@ export const useRepo = create<RepoStore>()((set, get) => {
             set({ root });
             await get().refreshStatus();
             set({ loaded: true });
+            set({ mainWorktree: await api.mainWorktree(root) });
             await get().refreshHistory();
             await get().loadReview();
             await get().loadVisuals();
@@ -339,6 +348,7 @@ export const useRepo = create<RepoStore>()((set, get) => {
             }
         },
         loaded: false,
+
         async loadMore() {
             const { commits, hasMore, historyRef, root } = get();
 
@@ -381,6 +391,7 @@ export const useRepo = create<RepoStore>()((set, get) => {
                 set({ error: errorMessage(error) });
             }
         },
+        mainWorktree: null,
         meta: { branches: [], remotes: [], stashes: [], tags: [], unpushed: [] },
         notify(message) {
             showToast(message, false);
@@ -391,7 +402,19 @@ export const useRepo = create<RepoStore>()((set, get) => {
                 set({ error: errorMessage(error) }),
             );
         },
+
+        openWorktree(path, tab) {
+            api.openRepository(path, tab).then(
+                () => {
+                    if (getSettings().worktreeReplacesWindow) {
+                        void getCurrentWindow().close();
+                    }
+                },
+                (error: unknown) => get().notify(errorMessage(error)),
+            );
+        },
         palette: false,
+
         perform(op, label) {
             const local =
                 op.type.startsWith('stage') ||
@@ -401,6 +424,7 @@ export const useRepo = create<RepoStore>()((set, get) => {
 
             enqueue(label, () => api.perform(get().root, op), !local);
         },
+        picker: null,
         plan: { status: 'idle' },
         plans: [],
         progress: null,

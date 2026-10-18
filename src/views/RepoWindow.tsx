@@ -1,15 +1,23 @@
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { revealItemInDir } from '@tauri-apps/plugin-opener';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
+import { lazy, Suspense, useEffect } from 'react';
 
 import { Icon } from '../components/Icon';
 import { Palette } from '../components/Palette';
+import { BranchPicker, WorkspacePicker } from '../components/Pickers';
 import { SettingsModal } from '../components/settings/SettingsModal';
 import { Sheets } from '../components/Sheets';
 import { Button } from '../components/ui';
-import { api, errorMessage } from '../lib/api';
-import { getSettings, syncRecents, type Theme, updateSettings, useSettings } from '../lib/settings';
+import { api } from '../lib/api';
+import { DOCUMENTATION_URL, ISSUES_URL } from '../lib/links';
+import {
+    effectiveMode,
+    getSettings,
+    syncRecents,
+    updateSettings,
+    useSettings,
+} from '../lib/settings';
 import { useSettingsModal } from '../lib/settingsModal';
 import { branchLabel, changeCount, repoName, type Tab, useRepo } from '../lib/store';
 import { useAppName, useAppVersion } from '../lib/version';
@@ -26,6 +34,7 @@ export function RepoWindow({ root }: { root: string }) {
     const tab = useRepo((state) => state.tab);
     const loaded = useRepo((state) => state.loaded);
     const palette = useRepo((state) => state.palette);
+    const picker = useRepo((state) => state.picker);
     const expanded = useRepo((state) => state.expanded);
     const { statusBar } = useSettings();
 
@@ -151,6 +160,8 @@ export function RepoWindow({ root }: { root: string }) {
             {statusBar && !expanded && <StatusBar />}
             <ToastView />
             {palette && <Palette />}
+            {picker === 'workspace' && <WorkspacePicker />}
+            {picker && picker !== 'workspace' && <BranchPicker key={picker} mode={picker} />}
             <Sheets />
             <SettingsModal />
         </div>
@@ -234,94 +245,35 @@ function Header() {
     const s = useRepo();
     const count = changeCount(s.status);
     const { ahead, behind, upstream } = s.status.branch;
-    const [branchMenu, setBranchMenu] = useState(false);
-    const local = s.meta.branches.filter((branch) => !branch.isRemote);
 
     return (
         <header
-            className="flex min-h-[46px] shrink-0 items-center gap-3.5 border-b border-line bg-panel py-1.5 pr-3.5 pl-[84px]"
+            className="flex min-h-[46px] shrink-0 items-center gap-3 overflow-hidden border-b border-line bg-panel py-1.5 pr-3.5 pl-[84px] whitespace-nowrap"
             data-tauri-drag-region
         >
             <PanelToggle side="left" />
-            <span className="font-semibold" data-tauri-drag-region>
+            <span
+                className="max-w-[220px] min-w-0 shrink truncate font-semibold"
+                data-tauri-drag-region
+                title={s.root}
+            >
                 {repoName(s.root)}
             </span>
-            <div className="relative">
-                <button
-                    aria-expanded={branchMenu}
-                    aria-haspopup="menu"
-                    className="flex h-7 items-center gap-1.5 rounded-md border border-control-line bg-control px-2.5 font-mono text-[12px]"
-                    onClick={() => setBranchMenu((previous) => !previous)}
-                    type="button"
-                >
-                    <Icon className="text-muted" name="branch" size={12} />
-                    {branchLabel(s.status)}
-                    <Icon className="text-muted" name="chevronDown" size={11} />
-                </button>
-                {branchMenu && (
-                    <>
-                        <div className="fixed inset-0 z-30" onClick={() => setBranchMenu(false)} />
-                        <div
-                            className="absolute top-8 left-0 z-40 max-h-[60vh] w-72 overflow-auto rounded-lg border border-control-line bg-panel p-1 shadow-[0_12px_40px_var(--shadow)]"
-                            role="menu"
-                        >
-                            <div className="px-2.5 pt-1.5 pb-1 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
-                                Switch to
-                            </div>
-                            {local.map((branch) =>
-                                branch.worktree && !branch.isCurrent ? (
-                                    <WorktreeItem
-                                        branch={branch.name}
-                                        key={branch.fullName}
-                                        onOpen={(tab) => {
-                                            setBranchMenu(false);
-                                            api.openRepository(branch.worktree!, tab).catch(
-                                                (error: unknown) => s.notify(errorMessage(error)),
-                                            );
-                                        }}
-                                        path={branch.worktree}
-                                    />
-                                ) : (
-                                    <button
-                                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-mono text-[12px] hover:bg-hover disabled:text-accent"
-                                        disabled={branch.isCurrent}
-                                        key={branch.fullName}
-                                        onClick={() => {
-                                            setBranchMenu(false);
-                                            s.perform(
-                                                { branch: branch.name, type: 'checkout' },
-                                                'Switching branch',
-                                            );
-                                        }}
-                                        role="menuitem"
-                                        type="button"
-                                    >
-                                        <span className="w-3">
-                                            {branch.isCurrent && <Icon name="check" size={12} />}
-                                        </span>
-                                        <span className="flex-1 truncate">{branch.name}</span>
-                                    </button>
-                                ),
-                            )}
-                            <div className="my-1 border-t border-line" />
-                            <button
-                                className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-hover"
-                                onClick={() => {
-                                    setBranchMenu(false);
-                                    s.set({ sheet: { from: null, kind: 'newBranch' } });
-                                }}
-                                role="menuitem"
-                                type="button"
-                            >
-                                <Icon name="plus" size={12} /> New branch…
-                            </button>
-                        </div>
-                    </>
-                )}
-            </div>
+            {s.mainWorktree && <WorktreeChip main={s.mainWorktree} root={s.root} />}
+            <button
+                aria-haspopup="listbox"
+                className="flex h-7 max-w-[160px] min-w-0 shrink items-center gap-1.5 rounded-md border border-control-line bg-control px-2.5 font-mono text-[12px] xl:max-w-[300px]"
+                onClick={() => s.set({ picker: 'branch' })}
+                title={`${branchLabel(s.status)}: switch branch`}
+                type="button"
+            >
+                <Icon className="shrink-0 text-muted" name="branch" size={12} />
+                <span className="truncate">{branchLabel(s.status)}</span>
+                <Icon className="shrink-0 text-muted" name="chevronDown" size={11} />
+            </button>
             <nav
                 aria-label="Views"
-                className="flex gap-0.5 rounded-[7px] border border-control-line bg-control p-0.5"
+                className="flex shrink-0 gap-0.5 rounded-[7px] border border-control-line bg-control p-0.5"
             >
                 {(['changes', 'history', 'review', 'visual'] as const).map((option) => (
                     <button
@@ -347,9 +299,10 @@ function Header() {
                     </button>
                 ))}
             </nav>
-            <div className="flex-1" data-tauri-drag-region />
+            <div className="min-w-2 flex-1" data-tauri-drag-region />
             <Button
                 aria-label="Fetch"
+                className="shrink-0"
                 onClick={s.fetch}
                 size="sm"
                 title="Fetch from all remotes (⇧⌘F)"
@@ -357,26 +310,30 @@ function Header() {
             >
                 <Icon name="refresh" size={13} />
             </Button>
-            <Button onClick={s.pull} size="sm" title="Pull (⇧⌘P)">
-                <Icon name="down" size={12} /> Pull
+            <Button className="shrink-0" onClick={s.pull} size="sm" title="Pull (⇧⌘P)">
+                <Icon name="down" size={12} /> <span className="hidden lg:inline">Pull</span>
                 {behind > 0 && <span className="text-accent">↓{behind}</span>}
             </Button>
             <Button
+                className="shrink-0"
                 onClick={() => s.push()}
                 size="sm"
                 title={upstream ? `Push to ${upstream} (⌘P)` : 'Publish this branch (⌘P)'}
             >
-                <Icon name="up" size={12} /> {upstream ? 'Push' : 'Publish'}
+                <Icon name="up" size={12} />{' '}
+                <span className="hidden lg:inline">{upstream ? 'Push' : 'Publish'}</span>
                 {ahead > 0 && <span className="text-accent">↑{ahead}</span>}
             </Button>
             <Button
                 aria-label="Command palette"
+                className="shrink-0"
                 onClick={() => s.set({ palette: true })}
                 size="sm"
                 title="Search and run any command (⌘K)"
                 variant="ghost"
             >
-                <Icon name="search" size={13} /> <span className="font-mono text-[11px]">⌘K</span>
+                <Icon name="search" size={13} />{' '}
+                <span className="hidden font-mono text-[11px] lg:inline">⌘K</span>
             </Button>
         </header>
     );
@@ -418,6 +375,8 @@ function onMenu(id: string) {
             return s.perform({ type: 'stageAll' }, 'Staging');
         case 'stash':
             return s.set({ sheet: { kind: 'stash', paths: [] } });
+        case 'switch-branch':
+            return s.set({ picker: 'branch' });
         case 'toggle-left':
             return updateSettings({ leftPanel: !getSettings().leftPanel });
         case 'toggle-right':
@@ -482,60 +441,112 @@ function ReviewBadge() {
     return open > 0 ? <span className="ml-1.5 text-accent">{open}</span> : null;
 }
 
+const SEGMENT =
+    'flex min-w-0 items-center gap-[5px] rounded-md px-1.5 py-[3px] text-muted hover:bg-hover hover:text-fg';
+
+const ICON_SEGMENT = `${SEGMENT} h-[22px] w-[22px] shrink-0 justify-center px-0`;
+
 function StatusBar() {
     const name = useAppName();
     const version = useAppVersion();
-    const { busy, progress, root, status } = useRepo();
+    const { busy, fetch, progress, push, root, set, status } = useRepo();
     const { theme } = useSettings();
+    const showSettings = useSettingsModal((state) => state.show);
     const { ahead, behind, head, upstream } = status.branch;
+    const dark = effectiveMode(theme) === 'dark';
 
     return (
-        <footer className="flex h-8 shrink-0 items-center gap-3.5 border-t border-line bg-panel px-3 text-[12px] text-muted">
-            <span className="flex items-center gap-1.5">
-                <Icon name="folder" size={12} />
-                {repoName(root)}
-            </span>
-            <span className="flex items-center gap-1.5 font-mono text-[11.5px]">
-                <Icon name="branch" size={12} />
-                {branchLabel(status)}
-            </span>
-            {upstream ? (
-                <span className="font-mono text-[11.5px]" title={`Ahead and behind ${upstream}`}>
-                    ↑{ahead} ↓{behind}
+        <footer className="flex h-8 shrink-0 items-center gap-0.5 overflow-hidden border-t border-line bg-panel px-2 text-[12px] whitespace-nowrap text-muted">
+            <button
+                className={SEGMENT}
+                onClick={() => set({ picker: 'workspace' })}
+                title={`${root}: open another workspace`}
+                type="button"
+            >
+                <Icon className="shrink-0" name="folder" size={12} />
+                <span className="max-w-[200px] truncate">{repoName(root)}</span>
+            </button>
+            <StatusDivider />
+            <button
+                className={SEGMENT}
+                onClick={() => set({ picker: 'branch' })}
+                title="Switch branch"
+                type="button"
+            >
+                <Icon className="shrink-0" name="branch" size={12} />
+                <span className="max-w-[240px] truncate font-mono text-[11.5px]">
+                    {branchLabel(status)}
                 </span>
+            </button>
+            {upstream ? (
+                <button
+                    className={`${SEGMENT} shrink-0 font-mono text-[11.5px]`}
+                    onClick={fetch}
+                    title={`Behind and ahead of ${upstream}. Click to fetch.`}
+                    type="button"
+                >
+                    ↓{behind} ↑{ahead}
+                </button>
             ) : head ? (
-                <span className="text-dim">Not published</span>
+                <button className={`${SEGMENT} shrink-0`} onClick={() => push()} type="button">
+                    <Icon name="up" size={11} /> Publish branch
+                </button>
             ) : null}
-            <span className="flex-1" />
+            <span className="min-w-2 flex-1" />
             {busy && (
-                <span className="flex min-w-0 items-center gap-2">
-                    <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+                <span className="mr-2 flex min-w-0 items-center gap-2">
+                    <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-accent" />
                     <span className="truncate">{progress ? `${busy} · ${progress}` : busy}</span>
                 </span>
             )}
-            <div
-                aria-label="Theme"
-                className="flex gap-0.5 rounded-md border border-control-line p-0.5"
-                role="radiogroup"
+            <button
+                className={`${SEGMENT} hidden shrink-0 md:flex`}
+                onClick={() => void openUrl(ISSUES_URL)}
+                type="button"
             >
-                {(['dark', 'light', 'auto'] as Theme[]).map((option) => (
-                    <button
-                        aria-checked={theme === option}
-                        className={`rounded px-1.5 text-[11px] capitalize ${theme === option ? 'bg-tab text-fg' : 'text-muted hover:text-fg'}`}
-                        key={option}
-                        onClick={() => updateSettings({ theme: option })}
-                        role="radio"
-                        type="button"
-                    >
-                        {option}
-                    </button>
-                ))}
-            </div>
-            <span className="text-dim">
+                <Icon name="external" size={11} /> Contribute
+            </button>
+            <button
+                className={`${SEGMENT} hidden shrink-0 md:flex`}
+                onClick={() => void openUrl(DOCUMENTATION_URL)}
+                type="button"
+            >
+                <Icon name="external" size={11} /> Documentation
+            </button>
+            <StatusDivider />
+            <button
+                aria-label={dark ? 'Switch to light' : 'Switch to dark'}
+                className={ICON_SEGMENT}
+                onClick={() => updateSettings({ theme: dark ? 'light' : 'dark' })}
+                title={dark ? 'Switch to light' : 'Switch to dark'}
+                type="button"
+            >
+                <Icon name={dark ? 'sun' : 'moon'} size={13} />
+            </button>
+            <button
+                aria-label="Settings"
+                className={ICON_SEGMENT}
+                onClick={() => showSettings()}
+                title="Settings (⌘,)"
+                type="button"
+            >
+                <Icon name="gear" size={13} />
+            </button>
+            <StatusDivider />
+            <button
+                className={`${SEGMENT} shrink-0`}
+                onClick={() => showSettings('about')}
+                title="About"
+                type="button"
+            >
                 {name} {version}
-            </span>
+            </button>
         </footer>
     );
+}
+
+function StatusDivider() {
+    return <span className="mx-0.5 h-[13px] w-px shrink-0 bg-line" />;
 }
 
 function ToastView() {
@@ -581,48 +592,19 @@ function VisualBadge() {
     ) : null;
 }
 
-/** A branch another worktree has checked out: opened in that worktree's own window, not switched to. */
-function WorktreeItem({
-    branch,
-    onOpen,
-    path,
-}: {
-    branch: string;
-    onOpen(tab?: Tab): void;
-    path: string;
-}) {
+/** Marks a window showing a linked worktree; opens the checkout it belongs to. */
+function WorktreeChip({ main, root }: { main: string; root: string }) {
+    const openWorktree = useRepo((state) => state.openWorktree);
+
     return (
-        <div className="group flex items-center rounded-md hover:bg-hover" title={path}>
-            <button
-                className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left font-mono text-[12px]"
-                onClick={() => onOpen()}
-                role="menuitem"
-                type="button"
-            >
-                <span className="w-3" />
-                <span className="truncate">{branch}</span>
-                <span className="shrink-0 rounded border border-control-line px-1 font-sans text-[10.5px] text-muted">
-                    worktree
-                </span>
-            </button>
-            <span className="hidden shrink-0 gap-0.5 pr-1.5 group-hover:flex">
-                <button
-                    className="rounded px-1.5 py-0.5 text-[11.5px] text-muted hover:text-fg"
-                    onClick={() => onOpen('review')}
-                    role="menuitem"
-                    type="button"
-                >
-                    Review
-                </button>
-                <button
-                    className="rounded px-1.5 py-0.5 text-[11.5px] text-muted hover:text-fg"
-                    onClick={() => onOpen('visual')}
-                    role="menuitem"
-                    type="button"
-                >
-                    Visual
-                </button>
-            </span>
-        </div>
+        <button
+            className="-ml-1 flex shrink-0 items-center gap-1.5 rounded-md border border-control-line px-1.5 py-0.5 text-[11.5px] text-muted hover:bg-hover hover:text-fg xl:px-2"
+            onClick={() => openWorktree(main)}
+            title={`${root} is a worktree of ${main}. Click to open ${repoName(main)}.`}
+            type="button"
+        >
+            <Icon name="folder" size={11} />
+            <span className="hidden xl:inline">worktree of {repoName(main)}</span>
+        </button>
     );
 }

@@ -139,6 +139,38 @@ export function Palette() {
     );
 }
 
+/** Case-insensitive match: substring hits rank first, then subsequence hits. */
+export function score(query: string, text: string): null | number {
+    const q = query.toLowerCase().trim();
+
+    if (!q) {
+        return 0;
+    }
+
+    const t = text.toLowerCase();
+    const i = t.indexOf(q);
+
+    if (i >= 0) {
+        return i;
+    }
+
+    let pos = 0;
+    let total = 100;
+
+    for (const ch of q.replace(/\s/g, '')) {
+        const found = t.indexOf(ch, pos);
+
+        if (found < 0) {
+            return null;
+        }
+
+        total += found - pos;
+        pos = found + 1;
+    }
+
+    return total;
+}
+
 function commands(): Command[] {
     const s = useRepo.getState();
     const { inProgress, lastCommit, meta, review, status } = s;
@@ -233,30 +265,21 @@ function commands(): Command[] {
                 group: 'Branches',
                 hint: worktree,
                 id: `worktree-${b.name}`,
-                run: () =>
-                    api
-                        .openRepository(worktree)
-                        .catch((error: unknown) => s.notify(errorMessage(error))),
+                run: () => s.openWorktree(worktree),
                 title: `Open ${b.name} in its worktree`,
             });
             add({
                 group: 'Branches',
                 hint: worktree,
                 id: `worktree-review-${b.name}`,
-                run: () =>
-                    api
-                        .openRepository(worktree, 'review')
-                        .catch((error: unknown) => s.notify(errorMessage(error))),
+                run: () => s.openWorktree(worktree, 'review'),
                 title: `Review ${b.name} in its worktree`,
             });
             add({
                 group: 'Branches',
                 hint: worktree,
                 id: `worktree-visual-${b.name}`,
-                run: () =>
-                    api
-                        .openRepository(worktree, 'visual')
-                        .catch((error: unknown) => s.notify(errorMessage(error))),
+                run: () => s.openWorktree(worktree, 'visual'),
                 title: `Recap or plan ${b.name} in its worktree`,
             });
             continue;
@@ -399,36 +422,4 @@ function commands(): Command[] {
     }
 
     return list;
-}
-
-/** Case-insensitive match: substring hits rank first, then subsequence hits. */
-function score(query: string, text: string): null | number {
-    const q = query.toLowerCase().trim();
-
-    if (!q) {
-        return 0;
-    }
-
-    const t = text.toLowerCase();
-    const i = t.indexOf(q);
-
-    if (i >= 0) {
-        return i;
-    }
-
-    let pos = 0;
-    let total = 100;
-
-    for (const ch of q.replace(/\s/g, '')) {
-        const found = t.indexOf(ch, pos);
-
-        if (found < 0) {
-            return null;
-        }
-
-        total += found - pos;
-        pos = found + 1;
-    }
-
-    return total;
 }
