@@ -16,6 +16,7 @@ export interface Branch {
     sha: string;
     upstream: null | string;
     upstreamGone: boolean;
+    worktree: null | string;
 }
 
 export interface BranchStatus {

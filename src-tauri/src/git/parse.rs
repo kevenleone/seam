@@ -392,6 +392,7 @@ pub fn branch_format() -> String {
         "%(HEAD)",
         "%(upstream:short)",
         "%(upstream:track,nobracket)",
+        "%(worktreepath)",
     ]
     .join("%1F")
 }
@@ -426,6 +427,10 @@ pub fn branches(text: &str) -> Vec<Branch> {
                 ahead,
                 behind,
                 upstream_gone: f[5] == "gone",
+                worktree: f
+                    .get(6)
+                    .filter(|path| !path.is_empty() && f[3] != "*")
+                    .map(|path| path.to_string()),
             })
         })
         .collect()
@@ -608,7 +613,7 @@ mod tests {
         let f = FIELD;
         let text = [
             format!("refs/heads/main{f}main{f}aaa{f}*{f}origin/main{f}ahead 2, behind 1"),
-            format!("refs/heads/old{f}old{f}bbb{f} {f}origin/old{f}gone"),
+            format!("refs/heads/old{f}old{f}bbb{f} {f}origin/old{f}gone{f}/tmp/old-tree"),
             format!("refs/remotes/origin/HEAD{f}origin{f}aaa{f} {f}{f}"),
             format!("refs/remotes/origin/main{f}origin/main{f}ccc{f} {f}{f}"),
         ]
@@ -620,7 +625,8 @@ mod tests {
         );
         assert!(b[0].is_current && b[0].ahead == 2 && b[0].behind == 1);
         assert!(b[1].upstream_gone);
-        assert!(b[2].is_remote);
+        assert_eq!(b[1].worktree.as_deref(), Some("/tmp/old-tree"));
+        assert!(b[2].is_remote && b[2].worktree.is_none());
     }
 
     #[test]
