@@ -393,6 +393,9 @@ pub fn branch_format() -> String {
         "%(upstream:short)",
         "%(upstream:track,nobracket)",
         "%(worktreepath)",
+        "%(committerdate:unix)",
+        "%(authorname)",
+        "%(contents:subject)",
     ]
     .join("%1F")
 }
@@ -431,7 +434,42 @@ pub fn branches(text: &str) -> Vec<Branch> {
                     .get(6)
                     .filter(|path| !path.is_empty() && f[3] != "*")
                     .map(|path| path.to_string()),
+                date: f.get(7).and_then(|date| date.parse().ok()).unwrap_or(0),
+                author: f.get(8).unwrap_or(&"").to_string(),
+                subject: f.get(9).unwrap_or(&"").to_string(),
             })
+        })
+        .collect()
+}
+
+/// `git worktree list --porcelain`: blank-line separated records, the main worktree first.
+pub fn worktrees(text: &str) -> Vec<Worktree> {
+    text.split("\n\n")
+        .filter_map(|record| {
+            let mut worktree = Worktree {
+                path: String::new(),
+                branch: None,
+                sha: None,
+                bare: false,
+            };
+            for line in record.lines() {
+                let (key, value) = line.split_once(' ').unwrap_or((line, ""));
+                match key {
+                    "worktree" => worktree.path = value.to_string(),
+                    "HEAD" => worktree.sha = Some(value.to_string()),
+                    "branch" => {
+                        worktree.branch = Some(
+                            value
+                                .strip_prefix("refs/heads/")
+                                .unwrap_or(value)
+                                .to_string(),
+                        )
+                    }
+                    "bare" => worktree.bare = true,
+                    _ => {}
+                }
+            }
+            (!worktree.path.is_empty()).then_some(worktree)
         })
         .collect()
 }
@@ -609,11 +647,28 @@ mod tests {
     }
 
     #[test]
+    fn worktree_list() {
+        let text = "worktree /src/seam\nHEAD aaa\nbranch refs/heads/main\n\n\
+                    worktree /src/seam-side\nHEAD bbb\nbranch refs/heads/feat/side\n\n\
+                    worktree /src/seam-old\nHEAD ccc\ndetached\nprunable gitdir file points to non-existent location\n";
+        let list = worktrees(text);
+        assert_eq!(
+            list.iter().map(|w| w.path.as_str()).collect::<Vec<_>>(),
+            ["/src/seam", "/src/seam-side", "/src/seam-old"]
+        );
+        assert_eq!(list[1].branch.as_deref(), Some("feat/side"));
+        assert_eq!(list[2].branch, None);
+        assert_eq!(list[2].sha.as_deref(), Some("ccc"));
+        assert!(!list[0].bare);
+        assert!(worktrees("worktree /src/bare.git\nbare\n")[0].bare);
+    }
+
+    #[test]
     fn branch_refs() {
         let f = FIELD;
         let text = [
             format!("refs/heads/main{f}main{f}aaa{f}*{f}origin/main{f}ahead 2, behind 1"),
-            format!("refs/heads/old{f}old{f}bbb{f} {f}origin/old{f}gone{f}/tmp/old-tree"),
+            format!("refs/heads/old{f}old{f}bbb{f} {f}origin/old{f}gone{f}/tmp/old-tree{f}1700000000{f}Ana{f}fix: a thing"),
             format!("refs/remotes/origin/HEAD{f}origin{f}aaa{f} {f}{f}"),
             format!("refs/remotes/origin/main{f}origin/main{f}ccc{f} {f}{f}"),
         ]
@@ -626,6 +681,10 @@ mod tests {
         assert!(b[0].is_current && b[0].ahead == 2 && b[0].behind == 1);
         assert!(b[1].upstream_gone);
         assert_eq!(b[1].worktree.as_deref(), Some("/tmp/old-tree"));
+        assert_eq!(
+            (b[1].date, b[1].author.as_str(), b[1].subject.as_str()),
+            (1700000000, "Ana", "fix: a thing")
+        );
         assert!(b[2].is_remote && b[2].worktree.is_none());
     }
 

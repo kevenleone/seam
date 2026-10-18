@@ -69,6 +69,9 @@ pub enum Op {
     Checkout {
         branch: String,
     },
+    CheckoutDetached {
+        rev: String,
+    },
     CreateBranch {
         name: String,
         start: Option<String>,
@@ -221,6 +224,10 @@ pub async fn perform(
         Op::Checkout { branch } => (
             u(repo.checkout(branch).await?),
             format!("Switched to {branch}"),
+        ),
+        Op::CheckoutDetached { rev } => (
+            u(repo.checkout_detached(rev).await?),
+            format!("Checked out {rev}, detached"),
         ),
         Op::CreateBranch {
             name,

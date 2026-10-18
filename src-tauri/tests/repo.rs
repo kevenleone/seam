@@ -415,7 +415,25 @@ async fn branches_know_their_worktree() {
     };
     assert_eq!(worktree("side"), Some(tree.to_string_lossy().into_owned()));
     assert_eq!(worktree("main"), None);
+    assert_eq!(
+        Repo::new(&tree).main_worktree().await.unwrap(),
+        Some(t.root.clone())
+    );
+    assert_eq!(t.repo.main_worktree().await.unwrap(), None);
     let _ = std::fs::remove_dir_all(&tree);
+}
+
+#[tokio::test]
+async fn checkout_detached_and_undo() {
+    let t = T::new().await;
+    let first = t.commit("a.txt", "a\n", "A").await;
+    t.repo.run(&["tag", "v1"]).await.unwrap();
+    t.commit("a.txt", "b\n", "B").await;
+    let detach = t.repo.checkout_detached("v1").await.unwrap();
+    assert_eq!(t.repo.current_branch().await, None);
+    assert_eq!(t.repo.head().await.as_deref(), Some(first.as_str()));
+    t.repo.undo(&detach.action).await.unwrap();
+    assert_eq!(t.repo.current_branch().await.as_deref(), Some("main"));
 }
 
 #[tokio::test]

@@ -735,6 +735,23 @@ async fn visual_state(app: AppHandle, root: String, kind: VisualKind) -> VisualS
     visual_state_for(&app, Path::new(&root), kind).await
 }
 
+/// Every worktree of the repository, the main one first.
+#[tauri::command]
+async fn worktrees(root: String) -> CmdResult<Vec<Worktree>> {
+    Repo::new(Path::new(&root)).worktrees().await
+}
+
+/// The main checkout, when `root` is a linked worktree of it.
+#[tauri::command]
+async fn main_worktree(root: String) -> Option<String> {
+    Repo::new(Path::new(&root))
+        .main_worktree()
+        .await
+        .ok()
+        .flatten()
+        .map(|path| path.to_string_lossy().into_owned())
+}
+
 /// What a recap would cover right now; an error when there is nothing to recap.
 #[tauri::command]
 async fn visual_scope(root: String) -> CmdResult<ScopeSummary> {
@@ -1246,6 +1263,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             &item("pull", "Pull", Some("CmdOrCtrl+Shift+P"))?,
             &item("push", "Push", Some("CmdOrCtrl+P"))?,
             &PredefinedMenuItem::separator(app)?,
+            &item("switch-branch", "Switch Branch…", Some("CmdOrCtrl+Shift+B"))?,
             &item("new-branch", "New Branch…", Some("CmdOrCtrl+Shift+N"))?,
             &item(
                 "review-branch",
@@ -1327,6 +1345,8 @@ pub fn run() {
             file_diff,
             blob,
             history_meta,
+            main_worktree,
+            worktrees,
             log,
             merge_base,
             commit_detail,
