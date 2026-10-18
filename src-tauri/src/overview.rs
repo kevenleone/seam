@@ -20,6 +20,12 @@ const MAX_SCRIPTS: usize = 10;
 const MAX_LANGUAGES: usize = 6;
 const MAX_DESCRIPTION_CHARS: usize = 400;
 const MAX_CHANGED_LISTED: usize = 300;
+/// How much a section's paths must change before it is out of date: each changed line counts
+/// one, each added or deleted file `FILE_WEIGHT`.
+const STALE_SCORE: u32 = 300;
+const FILE_WEIGHT: u32 = 100;
+/// The sections a new top-level folder of code makes out of date, since they map the layout.
+const LAYOUT_SECTIONS: &[&str] = &["architecture", "modules"];
 
 /// The sections an overview holds, in the order they are shown.
 pub const SECTIONS: [(&str, &str); 3] = [
@@ -813,8 +819,10 @@ pub enum OverviewState {
 pub struct Drift {
     pub commits: usize,
     pub files: usize,
-    /// Sections with a changed file under one of their paths.
+    /// Sections the new commits changed enough to be out of date.
     pub sections: Vec<String>,
+    /// Sections with only small edits under their paths, still worth reading as they are.
+    pub minor: Vec<String>,
     /// The commit it was written at is gone (garbage-collected, or never fetched here).
     pub missing: bool,
 }
@@ -860,20 +868,78 @@ fn under(file: &str, path: &str) -> bool {
     }
 }
 
-fn drifted_sections(overview: &Overview, changed: &[&str]) -> Vec<String> {
-    if changed.is_empty() {
-        return vec![];
-    }
-    overview
-        .sections
-        .iter()
-        .filter(|section| {
-            section.paths.is_empty()
-                || changed
-                    .iter()
-                    .any(|file| section.paths.iter().any(|path| under(file, path)))
+/// One file changed since an overview was written.
+struct Change<'a> {
+    path: &'a str,
+    /// `A`, `D`, `M` or `T`, as `git diff --name-status --no-renames` prints it.
+    status: char,
+    lines: u32,
+}
+
+fn changes<'a>(name_status: &'a str, numstat: &'a str) -> Vec<Change<'a>> {
+    let lines: HashMap<&str, u32> = numstat
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.splitn(3, '\t');
+            let added = parts.next()?.parse::<u32>().unwrap_or(0);
+            let deleted = parts.next()?.parse::<u32>().unwrap_or(0);
+            Some((parts.next()?, added + deleted))
         })
-        .map(|section| section.id.clone())
+        .collect();
+    name_status
+        .lines()
+        .filter_map(|line| {
+            let (status, path) = line.split_once('\t')?;
+            Some(Change {
+                path,
+                status: status.chars().next()?,
+                lines: lines.get(path).copied().unwrap_or(0),
+            })
+        })
+        .collect()
+}
+
+/// The sections out of date, and those with only small edits.
+fn classify(
+    overview: &Overview,
+    changed: &[Change],
+    new_folders: bool,
+) -> (Vec<String>, Vec<String>) {
+    let mut stale = vec![];
+    let mut minor = vec![];
+    for section in &overview.sections {
+        let touched: Vec<&Change> = changed
+            .iter()
+            .filter(|change| {
+                section.paths.is_empty()
+                    || section.paths.iter().any(|path| under(change.path, path))
+            })
+            .collect();
+        let layout = new_folders && LAYOUT_SECTIONS.contains(&section.id.as_str());
+        if touched.is_empty() && !layout {
+            continue;
+        }
+        let named_file_gone = touched
+            .iter()
+            .any(|change| change.status == 'D' && section.paths.iter().any(|p| p == change.path));
+        let files = touched
+            .iter()
+            .filter(|change| matches!(change.status, 'A' | 'D'))
+            .count() as u32;
+        let score = touched.iter().map(|change| change.lines).sum::<u32>() + files * FILE_WEIGHT;
+        if layout || named_file_gone || score >= STALE_SCORE {
+            stale.push(section.id.clone());
+        } else {
+            minor.push(section.id.clone());
+        }
+    }
+    (stale, minor)
+}
+
+fn top_folders(listing: &str) -> HashSet<&str> {
+    listing
+        .lines()
+        .filter(|name| !name.is_empty() && !name.starts_with('.'))
         .collect()
 }
 
@@ -895,13 +961,37 @@ pub async fn drift(repo: &Repo, overview: &Overview) -> Drift {
     }
     let range = format!("{anchor}..HEAD");
     let count_args = ["rev-list", "--count", range.as_str()];
-    let name_args = ["diff", "--name-only", "--no-renames", anchor, "HEAD"];
-    let (count, names) = tokio::join!(text(repo, &count_args), text(repo, &name_args));
-    let changed: Vec<&str> = names.lines().filter(|line| !line.is_empty()).collect();
+    let status_args = ["diff", "--name-status", "--no-renames", anchor, "HEAD"];
+    let numstat_args = ["diff", "--numstat", "--no-renames", anchor, "HEAD"];
+    let before_args = ["ls-tree", "-d", "--name-only", anchor];
+    let after_args = ["ls-tree", "-d", "--name-only", "HEAD"];
+    let (count, name_status, numstat, before, after) = tokio::join!(
+        text(repo, &count_args),
+        text(repo, &status_args),
+        text(repo, &numstat_args),
+        text(repo, &before_args),
+        text(repo, &after_args),
+    );
+    let changed = changes(&name_status, &numstat);
+    let existing = top_folders(&before);
+    let new_folders: HashSet<&str> = top_folders(&after)
+        .into_iter()
+        .filter(|folder| !existing.contains(folder))
+        .collect();
+    let new_code_folder = changed.iter().any(|change| {
+        change.status == 'A'
+            && language_of(change.path).is_some()
+            && change
+                .path
+                .split_once('/')
+                .is_some_and(|(folder, _)| new_folders.contains(folder))
+    });
+    let (sections, minor) = classify(overview, &changed, new_code_folder);
     Drift {
         commits: count.trim().parse().unwrap_or(0),
         files: changed.len(),
-        sections: drifted_sections(overview, &changed),
+        sections,
+        minor,
         missing: false,
     }
 }
@@ -933,7 +1023,7 @@ const WHAT_EACH_SECTION_HOLDS: &str = r#"Sections, with these ids:
 - "modules": one "fileTree" listing the 6 to 15 folders and files that matter most, each with a one-line note on its job. Paths exactly as tracked; folders end in "/".
 - "start": one "text" block naming the entry points and the three to five files to read first, in order, each with why. Optionally one short "code" block with a central type or function, copied from the repository.
 
-Each section's "paths" lists the folders and files its content describes, so Seam can tell when a change makes it out of date. Prefer folders over single files."#;
+Each section's "paths" lists the folders and files its content describes, so Seam can tell when a change makes it out of date. Use the narrowest folders that hold what the section describes ("src/lib/" and "src/views/" rather than "src/"), and name a single file only when the section is about that file."#;
 
 fn language(config: &AiConfig) -> &str {
     let language = config.review.language.trim();
@@ -1465,22 +1555,48 @@ mod tests {
     }
 
     #[test]
-    fn a_section_drifts_when_a_file_under_its_paths_changes() {
+    fn a_section_is_out_of_date_only_when_its_paths_change_enough() {
         let saved = overview(&[
             ("architecture", &["src-tauri/src/"]),
             ("modules", &["src/", "README.md"]),
-            ("start", &[]),
+            ("start", &["src/main.ts"]),
         ]);
+        let classified = |status: &str, numstat: &str, new_folders: bool| {
+            classify(&saved, &changes(status, numstat), new_folders)
+        };
+        let none: Vec<String> = vec![];
+
+        assert_eq!(classified("", "", false), (none.clone(), none.clone()));
         assert_eq!(
-            drifted_sections(&saved, &["src-tauri/src/lib.rs"]),
-            ["architecture", "start"]
+            classified("M\tsrc/lib/store.ts\n", "12\t3\tsrc/lib/store.ts\n", false),
+            (none.clone(), vec!["modules".to_string()])
         );
         assert_eq!(
-            drifted_sections(&saved, &["README.md"]),
-            ["modules", "start"]
+            classified(
+                "M\tsrc/a.ts\nM\tsrc/b.ts\n",
+                "200\t40\tsrc/a.ts\n50\t10\tsrc/b.ts\n",
+                false
+            ),
+            (vec!["modules".to_string()], none.clone())
         );
-        assert_eq!(drifted_sections(&saved, &["README.md.orig"]), ["start"]);
-        assert!(drifted_sections(&saved, &[]).is_empty());
+        let added = "A\tsrc-tauri/src/a.rs\nA\tsrc-tauri/src/b.rs\nA\tsrc-tauri/src/c.rs\n";
+        let added_lines =
+            "10\t0\tsrc-tauri/src/a.rs\n10\t0\tsrc-tauri/src/b.rs\n-\t-\tsrc-tauri/src/c.rs\n";
+        assert_eq!(
+            classified(added, added_lines, false),
+            (vec!["architecture".to_string()], none.clone())
+        );
+        assert_eq!(
+            classified("D\tsrc/main.ts\n", "0\t4\tsrc/main.ts\n", false),
+            (vec!["start".to_string()], vec!["modules".to_string()])
+        );
+        assert_eq!(
+            classified("M\tdocs/notes.md\n", "1\t0\tdocs/notes.md\n", true),
+            (
+                vec!["architecture".to_string(), "modules".to_string()],
+                none
+            )
+        );
     }
 
     #[test]

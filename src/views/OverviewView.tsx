@@ -212,11 +212,15 @@ function Freshness({ drift, shown }: { drift: Drift | null; shown: null | Overvi
         );
     }
 
+    const commits = `${drift.commits} commit${drift.commits === 1 ? '' : 's'} since`;
+
     return (
         <Pill tone="fresh">
-            {drift.commits
-                ? `Up to date · ${drift.commits} commit${drift.commits === 1 ? '' : 's'} since, none in what it covers`
-                : `Up to date · written ${written}`}
+            {drift.minor.length
+                ? `Up to date · ${commits}, small edits only`
+                : drift.commits
+                  ? `Up to date · ${commits}, none in what it covers`
+                  : `Up to date · written ${written}`}
         </Pill>
     );
 }
@@ -562,6 +566,7 @@ function Sections({
         <div className="flex flex-col gap-8">
             {overview.sections.map((section) => {
                 const stale = !!drift?.sections.includes(section.id);
+                const edited = !!drift?.minor.includes(section.id);
 
                 return (
                     <section className="flex flex-col gap-3" key={section.id}>
@@ -572,19 +577,24 @@ function Sections({
                                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
                                     Rewriting
                                 </span>
+                            ) : stale ? (
+                                <span className="rounded-full bg-warn-bg px-2 py-0.5 text-[11.5px] text-warn">
+                                    Changed since it was written
+                                </span>
                             ) : (
-                                stale && (
-                                    <span className="rounded-full bg-warn-bg px-2 py-0.5 text-[11.5px] text-warn">
-                                        Changed since it was written
+                                edited && (
+                                    <span className="rounded-full bg-control px-2 py-0.5 text-[11.5px] text-muted">
+                                        Small edits since
                                     </span>
                                 )
                             )}
                             <span className="flex-1" />
-                            {stale && !running && (
+                            {(stale || edited) && !running && (
                                 <Button
                                     onClick={() => startOverview([section.id])}
                                     size="sm"
                                     title={`Rewrite ${section.title} from the new commits`}
+                                    variant={stale ? 'default' : 'ghost'}
                                 >
                                     <Icon name="sparkle" size={12} /> Update section
                                 </Button>
