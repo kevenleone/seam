@@ -9,6 +9,7 @@ use crate::ai::{self, AiConfig, Kind, Level, Provider};
 use crate::git::models::FileDiff;
 use crate::git::repo;
 use crate::git::{parse, GitError, Repo, Result};
+use crate::overview;
 
 const MAX_DIFF_CHARS: usize = 400_000;
 const BASE_CANDIDATES: [&str; 4] = ["main", "master", "develop", "trunk"];
@@ -195,7 +196,7 @@ const FOCUS: [(&str, &str); 6] = [
     ("style", "readability: naming, dead code, long functions"),
 ];
 
-fn prompt(config: &AiConfig, scope: &Scope, diff: &str, truncated: bool) -> String {
+fn prompt(config: &AiConfig, scope: &Scope, diff: &str, truncated: bool, project: &str) -> String {
     let commits = if scope.commits.is_empty() {
         "(uncommitted changes, no commits)".to_string()
     } else {
@@ -258,12 +259,17 @@ Answer with ONLY one JSON object, no prose before or after it and no code fence:
 
 "line" is a line number in the NEW version of the file (the + side of the diff), or null if the finding is about the whole file.
 
-Commits:
+{project}Commits:
 {commits}
 
 Diff{trunc}:
 {diff}"#,
         label = scope.label,
+        project = if project.is_empty() {
+            String::new()
+        } else {
+            format!("{project}\n\n")
+        },
         focus = focus.join("\n- "),
         trunc = if truncated {
             " (truncated: large change)"
@@ -335,7 +341,16 @@ pub fn clip(diff_text: &str) -> (&str, bool) {
 pub async fn run(config: &AiConfig, root: &Path, scope: Scope) -> Result<Review> {
     let started = Instant::now();
     let (diff, truncated) = clip(&scope.diff_text);
-    let answer = ai::ask(config, root, &prompt(config, &scope, diff, truncated)).await?;
+    let project = match Repo::new(root).git_dir().await {
+        Ok(dir) => overview::project_context(&dir),
+        Err(_) => String::new(),
+    };
+    let answer = ai::ask(
+        config,
+        root,
+        &prompt(config, &scope, diff, truncated, &project),
+    )
+    .await?;
     let (summary, findings) = parse_answer(&answer)?;
     Ok(Review {
         provider: config.provider,
@@ -373,6 +388,22 @@ pub fn load(git_dir: &Path) -> Option<Review> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_prompt_carries_the_project_overview_when_there_is_one() {
+        let scope = Scope {
+            label: "main…feature".into(),
+            head_sha: None,
+            commits: vec!["abc1234 Add a thing".into()],
+            diff_text: String::new(),
+            diffs: vec![],
+        };
+        let config = AiConfig::default();
+        let with = prompt(&config, &scope, "diff", false, "About this project: P");
+        assert!(with.contains("About this project: P\n\nCommits:"));
+        let without = prompt(&config, &scope, "diff", false, "");
+        assert!(!without.contains("About this project"));
+    }
 
     #[test]
     fn parses_plain_fenced_and_wrapped_answers() {

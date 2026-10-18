@@ -20,6 +20,9 @@ const MAX_SCRIPTS: usize = 10;
 const MAX_LANGUAGES: usize = 6;
 const MAX_DESCRIPTION_CHARS: usize = 400;
 const MAX_CHANGED_LISTED: usize = 300;
+const MAX_CONTEXT_CHARS: usize = 6000;
+/// The sections other AI features are told about; "start" is for people opening the project.
+const CONTEXT_SECTIONS: &[&str] = &["architecture", "modules"];
 /// How much a section's paths must change before it is out of date: each changed line counts
 /// one, each added or deleted file `FILE_WEIGHT`.
 const STALE_SCORE: u32 = 300;
@@ -1344,6 +1347,78 @@ pub async fn run(
     })
 }
 
+// MARK: Context for other features
+
+/// What Review and Visual are told about the project, from its newest saved overview; empty
+/// before one is written.
+pub fn project_context(git_dir: &Path) -> String {
+    latest(git_dir)
+        .map(|overview| context_of(&overview))
+        .unwrap_or_default()
+}
+
+fn context_of(overview: &Overview) -> String {
+    let written_at = overview
+        .head_sha
+        .as_deref()
+        .map(|sha| format!(" at {}", &sha[..sha.len().min(7)]))
+        .unwrap_or_default();
+    let mut lines = vec![
+        format!("About this project, from the overview Seam saved{written_at} (the code may have moved since):"),
+        overview.purpose.clone(),
+    ];
+    for section in overview
+        .sections
+        .iter()
+        .filter(|section| CONTEXT_SECTIONS.contains(&section.id.as_str()))
+    {
+        lines.push(format!("\n{}:", section.title));
+        for block in &section.blocks {
+            match block {
+                Block::Text(text) => lines.push(text.markdown.trim().to_string()),
+                Block::FileTree(tree) => lines.extend(tree.files.iter().map(|file| {
+                    match file.note.as_deref().filter(|note| !note.trim().is_empty()) {
+                        Some(note) => format!("- {}: {note}", file.path),
+                        None => format!("- {}", file.path),
+                    }
+                })),
+                Block::Diagram(diagram) => {
+                    let label = |id: &str| {
+                        diagram
+                            .nodes
+                            .iter()
+                            .find(|node| node.id == id)
+                            .map_or(id.to_string(), |node| node.label.clone())
+                    };
+                    lines.extend(diagram.nodes.iter().map(|node| {
+                        match node
+                            .detail
+                            .as_deref()
+                            .filter(|detail| !detail.trim().is_empty())
+                        {
+                            Some(detail) => format!("- {}: {detail}", node.label),
+                            None => format!("- {}", node.label),
+                        }
+                    }));
+                    lines.extend(diagram.edges.iter().map(|edge| match &edge.label {
+                        Some(verb) if !verb.trim().is_empty() => {
+                            format!("- {} → {} ({verb})", label(&edge.from), label(&edge.to))
+                        }
+                        _ => format!("- {} → {}", label(&edge.from), label(&edge.to)),
+                    }));
+                }
+                _ => {}
+            }
+        }
+    }
+    let text = lines.join("\n");
+    if text.chars().count() <= MAX_CONTEXT_CHARS {
+        return text;
+    }
+    let cut: String = text.chars().take(MAX_CONTEXT_CHARS).collect();
+    format!("{}…", cut.trim_end())
+}
+
 // MARK: Saving
 
 fn dir(git_dir: &Path) -> PathBuf {
@@ -1615,6 +1690,41 @@ mod tests {
         );
         let (purpose, _) = merge(&previous, "New purpose.".into(), vec![]);
         assert_eq!(purpose, "New purpose.");
+    }
+
+    #[test]
+    fn other_features_are_told_the_purpose_architecture_and_modules() {
+        let mut saved = overview(&[]);
+        saved.head_sha = Some("abcdef1234".into());
+        saved.sections = parse_answer(
+            r#"{"purpose":"P","sections":[
+                {"id":"architecture","blocks":[
+                    {"type":"diagram","nodes":[{"id":"ui","label":"Views","detail":"React"},{"id":"host","label":"Host"}],"edges":[{"from":"ui","to":"host","label":"invoke"}]},
+                    {"type":"text","markdown":"Two processes."}]},
+                {"id":"modules","blocks":[{"type":"fileTree","files":[{"path":"src/lib/","note":"State"}]}]},
+                {"id":"start","blocks":[{"type":"text","markdown":"Read main.ts first."}]}
+            ]}"#,
+            &Tracked::new(TRACKED),
+        )
+        .unwrap()
+        .1;
+        let context = context_of(&saved);
+        assert!(context.starts_with("About this project, from the overview Seam saved at abcdef1"));
+        for expected in [
+            "\nOld purpose.\n",
+            "- Views: React",
+            "- Views → Host (invoke)",
+            "Two processes.",
+            "- src/lib/: State",
+        ] {
+            assert!(context.contains(expected), "{expected:?} in {context}");
+        }
+        assert!(!context.contains("Read main.ts first."));
+
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(project_context(dir.path()), "");
+        saved.purpose = "word ".repeat(2000);
+        assert!(context_of(&saved).chars().count() <= MAX_CONTEXT_CHARS + 1);
     }
 
     #[test]
