@@ -87,9 +87,11 @@ export type DiffSource = 'staged' | 'unstaged' | 'untracked';
 export interface Drift {
     commits: number;
     files: number;
+    /** Sections with only small edits under their paths. */
+    minor: string[];
     /** The commit it was written at is no longer in the repository. */
     missing: boolean;
-    /** Sections with a changed file under one of their paths. */
+    /** Sections the new commits changed enough to be out of date. */
     sections: string[];
 }
 

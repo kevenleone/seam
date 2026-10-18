@@ -149,9 +149,28 @@ async fn an_overview_drifts_only_where_the_code_moved() {
     assert!(untouched.sections.is_empty());
 
     t.commit(&[("src/a.ts", "changed\n")], "Change src").await;
-    let moved = overview::drift(&t.repo, &saved).await;
-    assert_eq!((moved.commits, moved.files), (2, 2));
-    assert_eq!(moved.sections, ["modules"]);
+    let edited = overview::drift(&t.repo, &saved).await;
+    assert_eq!((edited.commits, edited.files), (2, 2));
+    assert!(edited.sections.is_empty());
+    assert_eq!(edited.minor, ["modules"]);
+
+    t.commit(
+        &[
+            ("src/b.ts", "b\n"),
+            ("src/c.ts", "c\n"),
+            ("src/d.ts", "d\n"),
+        ],
+        "Add modules",
+    )
+    .await;
+    let grown = overview::drift(&t.repo, &saved).await;
+    assert_eq!(grown.sections, ["modules"]);
+    assert!(grown.minor.is_empty());
+
+    t.commit(&[("worker/run.ts", "run\n")], "Add a worker")
+        .await;
+    let laid_out = overview::drift(&t.repo, &saved).await;
+    assert_eq!(laid_out.sections, ["architecture", "modules"]);
 
     let gone = overview::drift(&t.repo, &written_at(Some("0".repeat(40)))).await;
     assert!(gone.missing);
