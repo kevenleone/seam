@@ -186,6 +186,20 @@ pub struct Branch {
     pub upstream_gone: bool,
     /// Where another worktree has this branch checked out.
     pub worktree: Option<String>,
+    /// The tip's committer date, in seconds.
+    pub date: i64,
+    pub author: String,
+    pub subject: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Worktree {
+    pub path: String,
+    /// The short branch name; `None` when detached or bare.
+    pub branch: Option<String>,
+    pub sha: Option<String>,
+    pub bare: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

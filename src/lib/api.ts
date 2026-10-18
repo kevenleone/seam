@@ -22,6 +22,7 @@ import type {
     VisualKind,
     VisualState,
     VisualSummary,
+    Worktree,
 } from './types';
 
 /** Typed wrappers around the Rust commands in src-tauri/src/lib.rs. */
@@ -51,6 +52,7 @@ export const api = {
     initRepository: (path: string) => invoke<void>('init_repository', { path }),
     log: (root: string, reference: string, skip: number, limit: number) =>
         invoke<Commit[]>('log', { limit, reference, root, skip }),
+    mainWorktree: (root: string) => invoke<null | string>('main_worktree', { root }),
     mergeBase: (root: string, first: string, second: string) =>
         invoke<null | string>('merge_base', { a: first, b: second, root }),
     notifyPrefs: () => invoke<NotifyPrefs>('notify_prefs'),
@@ -70,8 +72,8 @@ export const api = {
     redo: (root: string) => invoke<null | Outcome>('redo', { root }),
     removeRecentRepository: (path: string) => invoke<void>('remove_recent_repository', { path }),
     reviewState: (root: string) => invoke<ReviewState>('review_state', { root }),
-
     setAiConfig: (config: AiConfig) => invoke<void>('set_ai_config', { config }),
+
     setAiKey: (provider: Provider, key: string) => invoke<void>('set_ai_key', { key, provider }),
     setCliInstalled: (installed: boolean) => invoke<CliStatus>('set_cli_installed', { installed }),
     setGitPath: (path: null | string) => invoke<void>('set_git_path', { path }),
@@ -87,8 +89,8 @@ export const api = {
         provider: null | Provider,
     ) => invoke<void>('start_visual', { kind, prompt, provider, root }),
     stashDetail: (root: string, stash: Stash) => invoke<Detail>('stash_detail', { root, stash }),
-
     testAi: () => invoke<TestResult>('test_ai'),
+
     topLevel: (path: string) => invoke<null | string>('top_level', { path }),
     undo: (root: string) => invoke<null | Outcome>('undo', { root }),
     visualHistory: (root: string, kind: VisualKind) =>
@@ -97,6 +99,7 @@ export const api = {
     visualState: (root: string, kind: VisualKind) =>
         invoke<VisualState>('visual_state', { kind, root }),
     watch: (root: string) => invoke<void>('watch', { root }),
+    worktrees: (root: string) => invoke<Worktree[]>('worktrees', { root }),
 };
 
 export function errorMessage(error: unknown): string {

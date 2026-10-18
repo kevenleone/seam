@@ -8,12 +8,16 @@ export interface AiConfig {
 }
 export interface Branch {
     ahead: number;
+    author: string;
     behind: number;
+    /** The tip's committer date, in seconds. */
+    date: number;
     fullName: string;
     isCurrent: boolean;
     isRemote: boolean;
     name: string;
     sha: string;
+    subject: string;
     upstream: null | string;
     upstreamGone: boolean;
     worktree: null | string;
@@ -163,6 +167,7 @@ export type Op =
     | { paths: string[]; type: 'stage' }
     | { paths: string[]; type: 'unstage' }
     | { pop: boolean; stash: Stash; type: 'stashApply' }
+    | { rev: string; type: 'checkoutDetached' }
     | { sha: string; type: 'revert' }
     | { shas: string[]; type: 'cherryPick' }
     | { shas: string[]; type: 'drop' }
@@ -464,4 +469,12 @@ export interface VisualText {
 
 export interface VisualVerify {
     steps: { expect: string; how: string; title: string }[];
+}
+
+export interface Worktree {
+    bare: boolean;
+    /** The short branch name; `null` when detached or bare. */
+    branch: null | string;
+    path: string;
+    sha: null | string;
 }

@@ -177,6 +177,25 @@ impl Repo {
         ))
     }
 
+    pub async fn worktrees(&self) -> Result<Vec<Worktree>> {
+        Ok(parse::worktrees(
+            &self.read(&["worktree", "list", "--porcelain"]).await?,
+        ))
+    }
+
+    /// The main checkout, when this folder is a linked worktree of it.
+    pub async fn main_worktree(&self) -> Result<Option<PathBuf>> {
+        let Some(main) = self.worktrees().await?.into_iter().next() else {
+            return Ok(None);
+        };
+        // A bare repository has no checkout to go back to.
+        if main.bare {
+            return Ok(None);
+        }
+        let own = self.line(&["rev-parse", "--show-toplevel"]).await?;
+        Ok((main.path != own).then(|| PathBuf::from(main.path)))
+    }
+
     // MARK: Status and diffs
 
     pub async fn status(&self) -> Result<RepoStatus> {
@@ -680,6 +699,19 @@ impl Repo {
     pub async fn current_branch(&self) -> Option<String> {
         self.try_line(&["symbolic-ref", "--short", "-q", "HEAD"])
             .await
+    }
+
+    /// Detaches HEAD at `rev`: a tag, a remote branch or a commit, left as it is.
+    pub async fn checkout_detached(&self, rev: &str) -> Result<Undoable> {
+        let previous = self.current_branch().await;
+        let previous_sha = self.head().await;
+        self.run(&["switch", "--detach", rev]).await?;
+        let back = match (previous, previous_sha) {
+            (Some(p), _) => vec![cmd(&["switch", &p])],
+            (None, Some(sha)) => vec![cmd(&["switch", "--detach", &sha])],
+            _ => vec![],
+        };
+        Ok(undoable("Check out detached", UndoAction::Git(back)))
     }
 
     pub async fn checkout(&self, branch: &str) -> Result<Undoable> {
