@@ -53,10 +53,13 @@ export function DiffView({
     comments,
     diffs,
     interaction,
+    maxHeight,
 }: {
     comments?: DiffComments;
     diffs: FileDiff[];
     interaction?: DiffInteraction;
+    /** Sizes the view to its rows, up to this height, instead of filling its parent. */
+    maxHeight?: number;
 }) {
     const { codeSize, splitDiff, syntaxHighlight } = useSettings();
     const root = useRepo((state) => state.root);
@@ -253,9 +256,12 @@ export function DiffView({
     return (
         <Highlighted.Provider value={highlighted}>
             <div
-                className="relative min-h-0 flex-1 overflow-auto"
+                className={`relative overflow-auto ${maxHeight ? '' : 'min-h-0 flex-1'}`}
                 ref={scrollRef}
-                style={{ fontSize: codeSize }}
+                style={{
+                    fontSize: codeSize,
+                    height: maxHeight && Math.min(maxHeight, virtualizer.getTotalSize()),
+                }}
             >
                 <div
                     className="font-mono"
