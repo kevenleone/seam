@@ -9,6 +9,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use crate::ai::{self, AiConfig, Kind, Provider};
 use crate::git::models::FileDiff;
 use crate::git::{parse, Repo, Result};
+use crate::overview;
 use crate::review::{self, Scope};
 
 const MAX_SAVED: usize = 30;
@@ -792,12 +793,21 @@ pub async fn run(
 ) -> Result<Visual> {
     let started = Instant::now();
     let repo = Repo::new(root);
-    let context = match config.provider.kind() {
+    let project = match repo.git_dir().await {
+        Ok(dir) => overview::project_context(&dir),
+        Err(_) => String::new(),
+    };
+    let files = match config.provider.kind() {
         Kind::Api => format!(
             "\nRepository overview:\n{}",
             repository_context(&repo, root).await
         ),
         Kind::Harness => String::new(),
+    };
+    let context = if project.is_empty() {
+        files
+    } else {
+        format!("\n{project}\n{files}")
     };
     let (diff, truncated) = review::clip(&scope.diff_text);
     let prompt = match kind {
