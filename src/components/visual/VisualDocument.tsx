@@ -7,7 +7,7 @@ import type { VisualBlock, Visual as VisualDoc } from '../../lib/types';
 import { PROVIDER_LABELS } from '../../lib/ai';
 import { useSettings } from '../../lib/settings';
 import { type Highlighter, useHighlighter } from '../../lib/useHighlighter';
-import { installSketchStyle, sections } from '../../lib/visual';
+import { sections } from '../../lib/visual';
 import {
     CodeCard,
     CompareCard,
@@ -23,8 +23,6 @@ import { Diagram } from './Diagram';
 import { KeyChanges } from './KeyChanges';
 import { Inline, Prose } from './Markdown';
 import { type RenderMode, Visual } from './mode';
-
-installSketchStyle();
 
 const HEADINGS: Partial<Record<VisualBlock['type'], string>> = {
     contract: 'Contracts',

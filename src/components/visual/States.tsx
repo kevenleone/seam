@@ -2,12 +2,9 @@ import type { VisualState } from '../../lib/types';
 
 import { PROVIDER_LABELS } from '../../lib/ai';
 import { branchLabel, useRepo } from '../../lib/store';
-import { installSketchStyle } from '../../lib/visual';
 import { ChangedFiles, Commits, ScopeLine, useClock, useScope } from '../ChangeOverview';
 import { Icon } from '../Icon';
 import { Button } from '../ui';
-
-installSketchStyle();
 
 type RunningState = Extract<VisualState, { status: 'running' }>;
 

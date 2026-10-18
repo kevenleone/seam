@@ -5,6 +5,7 @@
 @import '@fontsource/jetbrains-mono/400.css';
 @import '@fontsource/jetbrains-mono/500.css';
 @import '@fontsource/patrick-hand/400.css';
+@import './lib/sketch.css';
 
 /* Seam tokens, taken from the design canvas. Dark is the reference; light mirrors it. */
 :root,
