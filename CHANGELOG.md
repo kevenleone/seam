@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.0](https://github.com/kevenleone/seam/compare/v0.4.0...v0.5.0) (2026-10-18)
+
+
+### Features
+
+* open a branch checked out in another worktree in its own window ([278a0a2](https://github.com/kevenleone/seam/commit/278a0a2e46d35191226dfea84514e62e24d487a6))
+* **ui:** show where the branch stands when there is nothing to commit ([d2428fe](https://github.com/kevenleone/seam/commit/d2428fe4d71b23d9d1d7cd76b283d717274f4a8a))
+
+
+### Bug Fixes
+
+* **ui:** bundle the wireframe sheet so sketches draw in release builds ([b5cc3e5](https://github.com/kevenleone/seam/commit/b5cc3e51a24c8bee338f03852aa09018d42aedb2))
+* **ui:** make the selected tab visible in light themes ([0b8c69a](https://github.com/kevenleone/seam/commit/0b8c69a319ba15dafb777fdfdc819b627221c116))
+* **ui:** size a file's diff panel to its rows, images and collapse included ([7a3215f](https://github.com/kevenleone/seam/commit/7a3215f150bbbd65c04eee5aa1dbf2d17ac705d8))
+
+
+### Documentation
+
+* warn against switching the checkout Seam Dev runs from ([4bf1cc2](https://github.com/kevenleone/seam/commit/4bf1cc2aeaf10c00be983b7da15e0cc7992b91cf))
+
 ## [0.4.0](https://github.com/kevenleone/seam/compare/v0.3.0...v0.4.0) (2026-10-17)
 
 
