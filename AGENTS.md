@@ -51,6 +51,11 @@ its own name, identifier (`app.seam.desktop.dev`, so its own prefs and recents)
 and icons (`src-tauri/icons/dev/`), so it runs beside an installed Seam. Host
 strings take the name from `package_info()`, never a literal "Seam".
 
+Seam Dev rebuilds from the checkout it runs in, so switching that checkout's
+branch from inside it restarts the app on the other branch's code (and fails
+on branches older than the dev config). Point Seam Dev at another worktree or
+repository when trying branch switches.
+
 `cargo test` and `cargo clippy` need `dist/` to exist (`tauri::generate_context!`
 embeds it), so run `pnpm build` once in a fresh checkout.
 
