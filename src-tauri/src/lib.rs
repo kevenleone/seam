@@ -257,8 +257,8 @@ fn pick_and_open(app: &AppHandle) {
 // MARK: Commands: windows
 
 #[tauri::command]
-async fn open_repository(app: AppHandle, path: String) -> CmdResult<()> {
-    open_repo_window(&app, Path::new(&path), None).await
+async fn open_repository(app: AppHandle, path: String, tab: Option<String>) -> CmdResult<()> {
+    open_repo_window(&app, Path::new(&path), tab.as_deref()).await
 }
 
 #[tauri::command]

@@ -389,6 +389,36 @@ async fn branches_and_push_to_bare_remote() {
 }
 
 #[tokio::test]
+async fn branches_know_their_worktree() {
+    let t = T::new().await;
+    t.commit("a.txt", "a\n", "A").await;
+    let tree = t.root.with_extension("tree");
+    t.repo
+        .run(&[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "side",
+            tree.to_str().unwrap(),
+        ])
+        .await
+        .unwrap();
+    let branches = t.repo.branches().await.unwrap();
+    let worktree = |name: &str| {
+        branches
+            .iter()
+            .find(|b| b.name == name)
+            .unwrap()
+            .worktree
+            .clone()
+    };
+    assert_eq!(worktree("side"), Some(tree.to_string_lossy().into_owned()));
+    assert_eq!(worktree("main"), None);
+    let _ = std::fs::remove_dir_all(&tree);
+}
+
+#[tokio::test]
 async fn rebase_conflict_is_reported() {
     let t = T::new().await;
     t.commit("a.txt", "base\n", "A").await;

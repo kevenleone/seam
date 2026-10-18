@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 
+import type { Tab } from './store';
 import type {
     AiConfig,
     CliStatus,
@@ -54,7 +55,8 @@ export const api = {
         invoke<null | string>('merge_base', { a: first, b: second, root }),
     notifyPrefs: () => invoke<NotifyPrefs>('notify_prefs'),
     openFolderDialog: () => invoke<void>('open_folder_dialog'),
-    openRepository: (path: string) => invoke<void>('open_repository', { path }),
+    openRepository: (path: string, tab?: Tab) =>
+        invoke<void>('open_repository', { path, tab: tab ?? null }),
     openSettingsWindow: (pane: null | string) => invoke<void>('open_settings_window', { pane }),
     openVisual: (root: string, kind: VisualKind, id: string) =>
         invoke<void>('open_visual', { id, kind, root }),

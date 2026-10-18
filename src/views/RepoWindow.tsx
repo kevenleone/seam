@@ -8,7 +8,7 @@ import { Palette } from '../components/Palette';
 import { SettingsModal } from '../components/settings/SettingsModal';
 import { Sheets } from '../components/Sheets';
 import { Button } from '../components/ui';
-import { api } from '../lib/api';
+import { api, errorMessage } from '../lib/api';
 import { getSettings, syncRecents, type Theme, updateSettings, useSettings } from '../lib/settings';
 import { useSettingsModal } from '../lib/settingsModal';
 import { branchLabel, changeCount, repoName, type Tab, useRepo } from '../lib/store';
@@ -36,7 +36,7 @@ export function RepoWindow({ root }: { root: string }) {
         // The tray opens a window straight onto its review with ?tab=review.
         const initialTab = new URLSearchParams(location.search).get('tab');
 
-        if (initialTab === 'review' || initialTab === 'history') {
+        if (initialTab === 'review' || initialTab === 'history' || initialTab === 'visual') {
             useRepo.getState().set({ tab: initialTab });
         }
 
@@ -268,27 +268,41 @@ function Header() {
                             <div className="px-2.5 pt-1.5 pb-1 text-[11px] font-semibold tracking-[0.08em] text-muted uppercase">
                                 Switch to
                             </div>
-                            {local.map((branch) => (
-                                <button
-                                    className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-mono text-[12px] hover:bg-hover disabled:text-accent"
-                                    disabled={branch.isCurrent}
-                                    key={branch.fullName}
-                                    onClick={() => {
-                                        setBranchMenu(false);
-                                        s.perform(
-                                            { branch: branch.name, type: 'checkout' },
-                                            'Switching branch',
-                                        );
-                                    }}
-                                    role="menuitem"
-                                    type="button"
-                                >
-                                    <span className="w-3">
-                                        {branch.isCurrent && <Icon name="check" size={12} />}
-                                    </span>
-                                    <span className="flex-1 truncate">{branch.name}</span>
-                                </button>
-                            ))}
+                            {local.map((branch) =>
+                                branch.worktree && !branch.isCurrent ? (
+                                    <WorktreeItem
+                                        branch={branch.name}
+                                        key={branch.fullName}
+                                        onOpen={(tab) => {
+                                            setBranchMenu(false);
+                                            api.openRepository(branch.worktree!, tab).catch(
+                                                (error: unknown) => s.notify(errorMessage(error)),
+                                            );
+                                        }}
+                                        path={branch.worktree}
+                                    />
+                                ) : (
+                                    <button
+                                        className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left font-mono text-[12px] hover:bg-hover disabled:text-accent"
+                                        disabled={branch.isCurrent}
+                                        key={branch.fullName}
+                                        onClick={() => {
+                                            setBranchMenu(false);
+                                            s.perform(
+                                                { branch: branch.name, type: 'checkout' },
+                                                'Switching branch',
+                                            );
+                                        }}
+                                        role="menuitem"
+                                        type="button"
+                                    >
+                                        <span className="w-3">
+                                            {branch.isCurrent && <Icon name="check" size={12} />}
+                                        </span>
+                                        <span className="flex-1 truncate">{branch.name}</span>
+                                    </button>
+                                ),
+                            )}
                             <div className="my-1 border-t border-line" />
                             <button
                                 className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-hover"
@@ -565,4 +579,50 @@ function VisualBadge() {
             className="ml-1.5 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-accent align-[2px]"
         />
     ) : null;
+}
+
+/** A branch another worktree has checked out: opened in that worktree's own window, not switched to. */
+function WorktreeItem({
+    branch,
+    onOpen,
+    path,
+}: {
+    branch: string;
+    onOpen(tab?: Tab): void;
+    path: string;
+}) {
+    return (
+        <div className="group flex items-center rounded-md hover:bg-hover" title={path}>
+            <button
+                className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left font-mono text-[12px]"
+                onClick={() => onOpen()}
+                role="menuitem"
+                type="button"
+            >
+                <span className="w-3" />
+                <span className="truncate">{branch}</span>
+                <span className="shrink-0 rounded border border-control-line px-1 font-sans text-[10.5px] text-muted">
+                    worktree
+                </span>
+            </button>
+            <span className="hidden shrink-0 gap-0.5 pr-1.5 group-hover:flex">
+                <button
+                    className="rounded px-1.5 py-0.5 text-[11.5px] text-muted hover:text-fg"
+                    onClick={() => onOpen('review')}
+                    role="menuitem"
+                    type="button"
+                >
+                    Review
+                </button>
+                <button
+                    className="rounded px-1.5 py-0.5 text-[11.5px] text-muted hover:text-fg"
+                    onClick={() => onOpen('visual')}
+                    role="menuitem"
+                    type="button"
+                >
+                    Visual
+                </button>
+            </span>
+        </div>
+    );
 }

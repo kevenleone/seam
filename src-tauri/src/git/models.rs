@@ -184,6 +184,8 @@ pub struct Branch {
     pub ahead: u32,
     pub behind: u32,
     pub upstream_gone: bool,
+    /// Where another worktree has this branch checked out.
+    pub worktree: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

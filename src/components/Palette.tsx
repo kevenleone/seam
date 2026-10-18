@@ -1,7 +1,7 @@
 import { revealItemInDir } from '@tauri-apps/plugin-opener';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { api } from '../lib/api';
+import { api, errorMessage } from '../lib/api';
 import { getSettings, recentRepositories } from '../lib/settings';
 import { useSettingsModal } from '../lib/settingsModal';
 import { branchLabel, isPushed, repoName, useRepo } from '../lib/store';
@@ -226,6 +226,42 @@ function commands(): Command[] {
     });
 
     for (const b of meta.branches.filter((branch) => !branch.isRemote && !branch.isCurrent)) {
+        const worktree = b.worktree;
+
+        if (worktree) {
+            add({
+                group: 'Branches',
+                hint: worktree,
+                id: `worktree-${b.name}`,
+                run: () =>
+                    api
+                        .openRepository(worktree)
+                        .catch((error: unknown) => s.notify(errorMessage(error))),
+                title: `Open ${b.name} in its worktree`,
+            });
+            add({
+                group: 'Branches',
+                hint: worktree,
+                id: `worktree-review-${b.name}`,
+                run: () =>
+                    api
+                        .openRepository(worktree, 'review')
+                        .catch((error: unknown) => s.notify(errorMessage(error))),
+                title: `Review ${b.name} in its worktree`,
+            });
+            add({
+                group: 'Branches',
+                hint: worktree,
+                id: `worktree-visual-${b.name}`,
+                run: () =>
+                    api
+                        .openRepository(worktree, 'visual')
+                        .catch((error: unknown) => s.notify(errorMessage(error))),
+                title: `Recap or plan ${b.name} in its worktree`,
+            });
+            continue;
+        }
+
         add({
             group: 'Branches',
             id: `switch-${b.name}`,
@@ -356,7 +392,8 @@ function commands(): Command[] {
             group: 'Repositories',
             hint: path.replace(/^\/Users\/[^/]+/, '~'),
             id: `recent-${path}`,
-            run: () => void api.openRepository(path),
+            run: () =>
+                api.openRepository(path).catch((error: unknown) => s.notify(errorMessage(error))),
             title: repoName(path),
         });
     }
