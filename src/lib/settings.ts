@@ -27,6 +27,8 @@ export interface Settings {
     theme: Theme;
     /** A visual recap or plan spans the window; otherwise it sits in one centred column. */
     visualWide: boolean;
+    /** Opening a worktree, or going back to its main checkout, closes the window it was opened from. */
+    worktreeReplacesWindow: boolean;
 }
 
 export type Theme = 'auto' | 'dark' | 'light';
@@ -47,6 +49,7 @@ export const DEFAULT_SETTINGS: Settings = {
     syntaxHighlight: true,
     theme: 'dark',
     visualWide: false,
+    worktreeReplacesWindow: false,
 };
 
 const KEY = 'seam.settings';

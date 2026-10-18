@@ -14,6 +14,7 @@ import type {
 
 import { PROVIDER_LABELS, REVIEW_FOCUS, useAi } from '../../lib/ai';
 import { api, errorMessage } from '../../lib/api';
+import { REPOSITORY_URL } from '../../lib/links';
 import {
     effectiveMode,
     syncRecents,
@@ -27,8 +28,6 @@ import { SeamMark } from '../Icon';
 import { Button } from '../ui';
 import { Row, SectionLabel, Segmented, SELECT, TEXT_FIELD, Toggle } from './controls';
 import { ThemePreview } from './ThemePreview';
-
-const REPOSITORY_URL = 'https://github.com/kevenleone/seam';
 
 // MARK: General
 
@@ -123,6 +122,21 @@ export function GeneralPane() {
                     label="Ignore whitespace"
                     on={settings.ignoreWhitespace}
                     onChange={(ignoreWhitespace) => updateSettings({ ignoreWhitespace })}
+                />
+            </Row>
+
+            <SectionLabel>Worktrees</SectionLabel>
+            <Row
+                desc="Opening a branch's worktree, or going back to the checkout it belongs to, closes the window you came from, so one window follows you around."
+                last
+                title="Replace the window"
+            >
+                <Toggle
+                    label="Replace the window"
+                    on={settings.worktreeReplacesWindow}
+                    onChange={(worktreeReplacesWindow) =>
+                        updateSettings({ worktreeReplacesWindow })
+                    }
                 />
             </Row>
 
@@ -805,6 +819,7 @@ const SHORTCUTS: { group: string; rows: [string, string][] }[] = [
             ['⇧⌘A', 'Stage all'],
             ['⌥⌘S', 'Stash changes'],
             ['⇧⌘F · ⇧⌘P · ⌘P', 'Fetch · Pull · Push'],
+            ['⇧⌘B', 'Switch branch'],
             ['⇧⌘N', 'New branch'],
             ['⇧⌘R', 'Review the branch with AI'],
             ['⇧⌘V', 'Draw a visual recap of the branch'],
