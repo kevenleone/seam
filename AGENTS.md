@@ -110,8 +110,13 @@ hot paths, scripts) come from git and the manifests with no AI, so the tab is
 never empty. The AI overview is three fixed sections (architecture, modules,
 where to start) of Visual's blocks, grounded in `git ls-files`. Each section
 lists the paths it covers and the overview keeps the commit it was written at,
-so drift is a `git diff --name-only` away and an update rewrites only the
-sections it touches. Overviews are kept in `.git/seam/overviews/`.
+so drift is measured with git alone: a section is out of date once its paths
+see enough change (lines, plus added and deleted files, past `STALE_SCORE`), a
+file it names is deleted, or a new top-level folder of code appears; smaller
+edits are reported as minor. An update rewrites only the sections asked for.
+Review and Visual prompts carry the newest overview's purpose, architecture and
+modules (`overview::project_context`). Overviews are kept in
+`.git/seam/overviews/`.
 `SEAM_LIVE_AI=claude cargo test --test overview -- --ignored` writes one live.
 
 `src/tray.rs` is the menu bar icon (recent projects, review the last-focused
