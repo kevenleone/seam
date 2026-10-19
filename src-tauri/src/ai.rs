@@ -146,6 +146,8 @@ pub struct AiConfig {
     /// Only for `openai-compatible`, up to and including `/v1`.
     pub base_url: String,
     pub review: ReviewStyle,
+    /// Whether a change opened with the `seam` command is reviewed straight away.
+    pub review_on_open: bool,
 }
 
 impl AiConfig {

@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use seam_lib::ai::{AiConfig, Provider};
 use seam_lib::git::Repo;
-use seam_lib::review;
+use seam_lib::review::{self, Target};
 
 struct T {
     _dir: tempfile::TempDir,
@@ -74,6 +74,109 @@ async fn scope_falls_back_to_uncommitted_changes_on_main() {
 
     t.repo.run(&["checkout", "--", "a.txt"]).await.unwrap();
     assert!(review::scope(&t.repo).await.is_err());
+}
+
+fn files(scope: &review::Scope) -> Vec<&str> {
+    scope.diffs.iter().map(|d| d.path()).collect()
+}
+
+#[tokio::test]
+async fn a_named_target_scopes_exactly_that_change() {
+    let t = T::new().await;
+    t.commit("a.txt", "a\n", "Base").await;
+    t.commit("b.txt", "b\n", "Add b").await;
+    t.commit("c.txt", "c\n", "Add c").await;
+    std::fs::write(t.root.join("a.txt"), "staged\n").unwrap();
+    t.repo.run(&["add", "a.txt"]).await.unwrap();
+    std::fs::write(t.root.join("c.txt"), "unstaged\n").unwrap();
+
+    let staged = review::scope_of(&t.repo, &Target::Staged { paths: vec![] })
+        .await
+        .unwrap();
+    assert_eq!(staged.label, "Staged changes");
+    assert_eq!(files(&staged), ["a.txt"]);
+
+    let working = review::scope_of(
+        &t.repo,
+        &Target::WorkingTree {
+            paths: vec!["c.txt".into()],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(files(&working), ["c.txt"]);
+
+    let last_two = review::scope_of(
+        &t.repo,
+        &Target::Range {
+            range: "HEAD~2".into(),
+            paths: vec![],
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(last_two.label, "HEAD~2..HEAD");
+    assert_eq!(last_two.commits.len(), 2);
+    assert_eq!(files(&last_two), ["b.txt", "c.txt"]);
+
+    let commit = review::scope_of(
+        &t.repo,
+        &Target::Commit {
+            rev: "HEAD~1".into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(files(&commit), ["b.txt"]);
+    assert!(commit.commits[0].ends_with("Add b"));
+    assert_eq!(
+        commit.target,
+        Target::Commit {
+            rev: "HEAD~1".into()
+        }
+    );
+
+    let patch = t.root.join("change.patch");
+    let text = t
+        .repo
+        .run(&["diff", "HEAD~1", "HEAD"])
+        .await
+        .unwrap()
+        .text();
+    std::fs::write(&patch, text).unwrap();
+    let from_patch = review::scope_of(
+        &t.repo,
+        &Target::Patch {
+            file: patch,
+            label: "Patch from stdin".into(),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(from_patch.label, "Patch from stdin");
+    assert_eq!(files(&from_patch), ["c.txt"]);
+}
+
+#[tokio::test]
+async fn a_named_target_with_nothing_in_it_says_so() {
+    let t = T::new().await;
+    t.commit("a.txt", "a\n", "Base").await;
+
+    let empty = review::scope_of(&t.repo, &Target::Staged { paths: vec![] }).await;
+    assert!(empty
+        .err()
+        .unwrap()
+        .message
+        .contains("Staged changes has no changes"));
+    let unknown = review::scope_of(
+        &t.repo,
+        &Target::Range {
+            range: "nope..HEAD".into(),
+            paths: vec![],
+        },
+    )
+    .await;
+    assert!(unknown.is_err());
 }
 
 /// Runs a real model: `SEAM_LIVE_AI=claude cargo test --test review -- --ignored`.

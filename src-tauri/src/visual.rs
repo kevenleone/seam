@@ -10,7 +10,7 @@ use crate::ai::{self, AiConfig, Kind, Provider};
 use crate::git::models::FileDiff;
 use crate::git::{parse, Repo, Result};
 use crate::overview;
-use crate::review::{self, Scope};
+use crate::review::{self, Scope, Target};
 
 const MAX_SAVED: usize = 30;
 const MAX_LISTED_FILES: usize = 1500;
@@ -374,6 +374,7 @@ pub async fn plan_scope(repo: &Repo) -> Result<Scope> {
         commits: vec![],
         diffs: parse::diff(&diff_text),
         diff_text,
+        target: Target::Auto,
     })
 }
 

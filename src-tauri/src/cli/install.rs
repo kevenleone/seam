@@ -40,7 +40,7 @@ pub fn install<R: Runtime>(app: &AppHandle<R>) {
         Ok(link) => (
             MessageDialogKind::Info,
             format!(
-                "Installed {}.\n\nRun `{CLI_NAME} .` to open the repository you are in.",
+                "Installed {}.\n\nRun `{CLI_NAME}` in a repository to open its changes, or `{CLI_NAME} --help` for the rest.",
                 link.display()
             ),
         ),
@@ -82,7 +82,7 @@ fn status<R: Runtime>(app: &AppHandle<R>) -> CliStatus {
     }
 }
 
-fn link() -> PathBuf {
+pub(super) fn link() -> PathBuf {
     Path::new(BIN_DIR).join(CLI_NAME)
 }
 
@@ -103,7 +103,7 @@ fn is_installed<R: Runtime>(app: &AppHandle<R>) -> bool {
     points_at(&link(), &script)
 }
 
-fn points_at(link: &Path, script: &Path) -> bool {
+pub(super) fn points_at(link: &Path, script: &Path) -> bool {
     let is_link = std::fs::symlink_metadata(link)
         .map(|metadata| metadata.file_type().is_symlink())
         .unwrap_or(false);

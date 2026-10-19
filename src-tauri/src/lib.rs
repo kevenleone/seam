@@ -1,6 +1,9 @@
 pub mod ai;
-mod cli;
+pub mod cli;
+pub mod explain;
+pub mod forge;
 pub mod git;
+pub mod handoff;
 mod notify;
 pub mod overview;
 mod prefs;
@@ -22,7 +25,7 @@ use git::{GitError, Repo};
 use notify_debouncer_mini::{new_debouncer, notify::RecursiveMode, DebounceEventResult, Debouncer};
 use overview::{Drift, Facts, Overview, OverviewState, OverviewSummary};
 use prefs::{NotifyPrefs, PrefsStore};
-use review::ReviewState;
+use review::{ReviewState, Target};
 use serde::Serialize;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::{
@@ -607,12 +610,123 @@ async fn review_state_for(app: &AppHandle, root: &Path) -> ReviewState {
 fn previous_review(state: ReviewState) -> Option<review::Review> {
     match state {
         ReviewState::Done { review } => Some(review),
-        ReviewState::Failed { previous, .. } => previous,
+        ReviewState::Failed { previous, .. } | ReviewState::Opened { previous, .. } => previous,
         _ => None,
     }
 }
 
-async fn start_review_task(app: &AppHandle, root: PathBuf, config: AiConfig) -> CmdResult<()> {
+fn set_review(app: &AppHandle, root: &Path, state: ReviewState) {
+    app.state::<AppState>()
+        .reviews
+        .lock()
+        .unwrap()
+        .insert(root.to_path_buf(), state);
+    emit_review(app, root);
+}
+
+/// Shows a change in the Review tab without asking a model, until it is reviewed or closed.
+async fn show_opened(app: &AppHandle, root: &Path, target: &Target) {
+    let current = review_state_for(app, root).await;
+    if matches!(current, ReviewState::Running { .. }) {
+        return;
+    }
+    let state = match review::scope_of(&Repo::new(root), target).await {
+        Ok(scope) => ReviewState::Opened {
+            scope: scope.label,
+            commits: scope.commits,
+            diffs: scope.diffs,
+            target: scope.target,
+            previous: previous_review(current),
+        },
+        Err(e) => ReviewState::Failed {
+            provider: app.state::<PrefsStore>().ai().provider,
+            message: e.message,
+            previous: previous_review(current),
+            target: target.clone(),
+        },
+    };
+    set_review(app, root, state);
+}
+
+#[tauri::command]
+async fn close_opened_review(app: AppHandle, root: String) {
+    let root = PathBuf::from(root);
+    let current = review_state_for(&app, &root).await;
+    if let ReviewState::Opened { previous, .. } = current {
+        let state = previous.map_or(ReviewState::Idle, |review| ReviewState::Done { review });
+        set_review(&app, &root, state);
+    }
+}
+
+/// The AI configuration, with `provider` swapped in for one run.
+fn config_with(app: &AppHandle, provider: Option<Provider>) -> AiConfig {
+    let mut config = app.state::<PrefsStore>().ai();
+    if let Some(provider) = provider {
+        if provider != config.provider {
+            config.provider = provider;
+            config.model.clear();
+        }
+    }
+    config
+}
+
+/// Opens the repository at `path` and does what the `seam` command left for it, if anything.
+async fn open_requested(app: &AppHandle, path: &Path) -> CmdResult<()> {
+    let Some(root) = Repo::top_level(path).await else {
+        return open_repo_window(app, path, None).await;
+    };
+    let requests = match Repo::new(&root).git_dir().await {
+        Ok(dir) => handoff::take(&dir),
+        Err(_) => vec![],
+    };
+    let tab = requests.last().map(|request| match request.action {
+        handoff::Action::Explain => "visual",
+        _ => "review",
+    });
+    open_repo_window(app, &root, tab).await?;
+    for request in requests {
+        let config = config_with(app, request.provider);
+        match request.action {
+            handoff::Action::Open => show_opened(app, &root, &request.target).await,
+            handoff::Action::Review => {
+                let _ = start_review_task(app, root.clone(), config, &request.target).await;
+            }
+            handoff::Action::Explain => {
+                let _ = start_visual_task(
+                    app,
+                    root.clone(),
+                    VisualKind::Recap,
+                    None,
+                    config,
+                    &request.target,
+                )
+                .await;
+            }
+            handoff::Action::ShowReview => {
+                let saved = match Repo::new(&root).git_dir().await {
+                    Ok(dir) => review::load(&dir),
+                    Err(_) => None,
+                };
+                if let Some(review) = saved {
+                    if !matches!(
+                        review_state_for(app, &root).await,
+                        ReviewState::Running { .. }
+                    ) {
+                        set_review(app, &root, ReviewState::Done { review });
+                    }
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn start_review_task(
+    app: &AppHandle,
+    root: PathBuf,
+    config: AiConfig,
+    target: &Target,
+) -> CmdResult<()> {
     let current = review_state_for(app, &root).await;
     if matches!(current, ReviewState::Running { .. }) {
         return Ok(());
@@ -626,13 +740,14 @@ async fn start_review_task(app: &AppHandle, root: PathBuf, config: AiConfig) -> 
             .insert(root.clone(), state);
         emit_review(app, &root);
     };
-    let scope = match review::scope(&repo).await {
+    let scope = match review::scope_of(&repo, target).await {
         Ok(scope) => scope,
         Err(e) => {
             set(ReviewState::Failed {
                 provider: config.provider,
                 message: e.message.clone(),
                 previous: previous_review(current),
+                target: target.clone(),
             });
             return Err(e);
         }
@@ -649,6 +764,7 @@ async fn start_review_task(app: &AppHandle, root: PathBuf, config: AiConfig) -> 
     let handle = app.clone();
     let task_root = root.clone();
     let previous = previous_review(current);
+    let task_target = target.clone();
     let task = tauri::async_runtime::spawn(async move {
         let result = review::run(&config, &task_root, scope).await;
         let state = match result {
@@ -662,6 +778,7 @@ async fn start_review_task(app: &AppHandle, root: PathBuf, config: AiConfig) -> 
                 provider: config.provider,
                 message: e.message,
                 previous,
+                target: task_target,
             },
         };
         notify_review(&handle, &task_root, &state);
@@ -795,15 +912,27 @@ async fn start_visual(
     prompt: Option<String>,
     provider: Option<Provider>,
 ) -> CmdResult<()> {
-    let root = PathBuf::from(root);
-    let mut config = app.state::<PrefsStore>().ai();
-    if let Some(provider) = provider {
-        if provider != config.provider {
-            config.provider = provider;
-            config.model.clear();
-        }
-    }
-    let current = visual_state_for(&app, &root, kind).await;
+    let config = config_with(&app, provider);
+    start_visual_task(
+        &app,
+        PathBuf::from(root),
+        kind,
+        prompt,
+        config,
+        &Target::Auto,
+    )
+    .await
+}
+
+async fn start_visual_task(
+    app: &AppHandle,
+    root: PathBuf,
+    kind: VisualKind,
+    prompt: Option<String>,
+    config: AiConfig,
+    target: &Target,
+) -> CmdResult<()> {
+    let current = visual_state_for(app, &root, kind).await;
     if matches!(current, VisualState::Running { .. }) {
         return Ok(());
     }
@@ -813,7 +942,7 @@ async fn start_visual(
     let repo = Repo::new(&root);
     let branch = repo.current_branch().await;
     let scope = match kind {
-        VisualKind::Recap => review::scope(&repo).await,
+        VisualKind::Recap => review::scope_of(&repo, target).await,
         VisualKind::Plan if prompt.is_none() => {
             Err(GitError::new("Describe the change to plan first."))
         }
@@ -823,7 +952,7 @@ async fn start_visual(
         Ok(scope) => scope,
         Err(e) => {
             set_visual(
-                &app,
+                app,
                 &root,
                 kind,
                 branch,
@@ -838,7 +967,7 @@ async fn start_visual(
         }
     };
     set_visual(
-        &app,
+        app,
         &root,
         kind,
         branch.clone(),
@@ -1283,16 +1412,22 @@ async fn review_state(app: AppHandle, root: String) -> ReviewState {
 }
 
 /// Reviews with the configured AI; `provider` overrides which one for this run only.
+/// `target` is the change to read, the branch or uncommitted work when there is none.
 #[tauri::command]
-async fn start_review(app: AppHandle, root: String, provider: Option<Provider>) -> CmdResult<()> {
-    let mut config = app.state::<PrefsStore>().ai();
-    if let Some(provider) = provider {
-        if provider != config.provider {
-            config.provider = provider;
-            config.model.clear();
-        }
-    }
-    start_review_task(&app, PathBuf::from(root), config).await
+async fn start_review(
+    app: AppHandle,
+    root: String,
+    provider: Option<Provider>,
+    target: Option<Target>,
+) -> CmdResult<()> {
+    let config = config_with(&app, provider);
+    start_review_task(
+        &app,
+        PathBuf::from(root),
+        config,
+        &target.unwrap_or_default(),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -1534,7 +1669,7 @@ fn on_menu(app: &AppHandle, id: &str) {
         "settings" if !focused_window(app).is_some_and(|w| w.label().starts_with("repo-")) => {
             let _ = show_settings(app, None);
         }
-        "install-cli" => cli::install(app),
+        "install-cli" => cli::install::install(app),
         "quit" => app.exit(0),
         "welcome" => {
             let _ = show_welcome(app);
@@ -1554,6 +1689,10 @@ fn on_menu(app: &AppHandle, id: &str) {
 }
 
 // MARK: App
+
+pub(crate) fn context() -> tauri::Context<tauri::Wry> {
+    tauri::generate_context!()
+}
 
 pub fn run() {
     let app = tauri::Builder::default()
@@ -1620,8 +1759,9 @@ pub fn run() {
             set_notify_prefs,
             play_sound,
             sounds,
-            cli::cli_status,
-            cli::set_cli_installed,
+            cli::install::cli_status,
+            cli::install::set_cli_installed,
+            close_opened_review,
         ])
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::Destroyed => {
@@ -1661,7 +1801,7 @@ pub fn run() {
             } else {
                 tauri::async_runtime::spawn(async move {
                     for p in paths {
-                        if open_repo_window(&handle, &p, None).await.is_err() {
+                        if open_requested(&handle, &p).await.is_err() {
                             let _ = show_welcome(&handle);
                         }
                     }
@@ -1669,7 +1809,7 @@ pub fn run() {
             }
             Ok(())
         })
-        .build(tauri::generate_context!())
+        .build(context())
         .expect("error while building Seam");
 
     app.run(|app, event| match event {
@@ -1684,7 +1824,7 @@ pub fn run() {
                 if let Ok(path) = url.to_file_path() {
                     let handle = app.clone();
                     tauri::async_runtime::spawn(async move {
-                        if let Err(e) = open_repo_window(&handle, &path, None).await {
+                        if let Err(e) = open_requested(&handle, &path).await {
                             handle
                                 .dialog()
                                 .message(e.message)

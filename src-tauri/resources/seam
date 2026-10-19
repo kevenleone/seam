@@ -1,6 +1,6 @@
 #!/bin/sh
-# Goes through `open`, so the app receives folders the same way it does from
-# Finder, whether or not it is already running.
+# Runs the app's own binary in command-line mode; it reaches the app (or starts it)
+# through `open`, the same way Finder does.
 
 self="$0"
 while [ -L "$self" ]; do
@@ -13,12 +13,6 @@ done
 
 # Seam.app/Contents/Resources/resources/seam
 app="$(cd "$(dirname "$self")/../../.." && pwd)"
+binary="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$app/Contents/Info.plist")"
 
-for argument in "$@"; do
-    if [ ! -d "$argument" ]; then
-        echo "$(basename "$0"): $argument: not a folder" >&2
-        exit 1
-    fi
-done
-
-exec open -a "$app" "$@"
+exec "$app/Contents/MacOS/$binary" --cli "$@"
