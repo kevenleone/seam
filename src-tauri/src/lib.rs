@@ -1380,6 +1380,30 @@ async fn ai_providers() -> Vec<ProviderStatus> {
 }
 
 #[tauri::command]
+async fn mcp_agents(app: AppHandle) -> Vec<mcp::agents::AgentStatus> {
+    let Some(launch) = mcp::agents::Launch::current() else {
+        return vec![];
+    };
+    let name = mcp::agents::server_name(&app.config().identifier);
+    mcp::agents::statuses(&name, &launch).await
+}
+
+#[tauri::command]
+async fn set_mcp_agent(
+    app: AppHandle,
+    id: String,
+    on: bool,
+) -> CmdResult<mcp::agents::AgentStatus> {
+    let launch = mcp::agents::Launch::current()
+        .ok_or_else(|| GitError::new("Couldn't tell where Seam is installed."))?;
+    let agent = mcp::agents::agent(&id).map_err(GitError::new)?;
+    let name = mcp::agents::server_name(&app.config().identifier);
+    mcp::agents::connect(agent, &name, &launch, on)
+        .await
+        .map_err(GitError::new)
+}
+
+#[tauri::command]
 fn ai_config(prefs: State<'_, PrefsStore>) -> AiConfig {
     prefs.ai()
 }
@@ -1763,6 +1787,8 @@ pub fn run() {
             cli::install::cli_status,
             cli::install::set_cli_installed,
             close_opened_review,
+            mcp_agents,
+            set_mcp_agent,
         ])
         .on_window_event(|window, event| match event {
             tauri::WindowEvent::Destroyed => {

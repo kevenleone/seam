@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 
 import type { Mode } from '../../lib/themes';
 import type {
+    AgentConnection,
     AiConfig,
     CliStatus,
     NotifyPrefs,
@@ -558,6 +559,93 @@ export function AiPane() {
                     onChange={(reviewOnOpen) => save({ reviewOnOpen })}
                 />
             </Row>
+            <AgentsSection />
+        </>
+    );
+}
+
+function agentDescription(agent: AgentConnection): string {
+    if (!agent.installed) {
+        return 'Not installed on this Mac.';
+    }
+
+    if (agent.connection === 'stale') {
+        return `Its “${agent.server}” server starts another copy of Seam. Connect it again to use this one.`;
+    }
+
+    return `Lets it open diffs in Seam and leave review comments beside them, through ${agent.server} mcp.`;
+}
+
+function AgentsSection() {
+    const [agents, setAgents] = useState<AgentConnection[] | null>(null);
+    const [busy, setBusy] = useState<null | Provider>(null);
+    const [error, setError] = useState<null | string>(null);
+
+    useEffect(() => {
+        void api.mcpAgents().then(setAgents, () => setAgents([]));
+    }, []);
+
+    if (!agents?.length) {
+        return null;
+    }
+
+    const connect = async (agent: AgentConnection, on: boolean): Promise<void> => {
+        if (busy) {
+            return;
+        }
+
+        setBusy(agent.id);
+        setError(null);
+
+        try {
+            const next = await api.setMcpAgent(agent.id, on);
+
+            setAgents((current) =>
+                (current ?? []).map((candidate) => (candidate.id === next.id ? next : candidate)),
+            );
+        } catch (reason) {
+            setError(errorMessage(reason));
+        } finally {
+            setBusy(null);
+        }
+    };
+
+    return (
+        <>
+            <SectionLabel>Agents</SectionLabel>
+            {agents.map((agent, index) => (
+                <Row
+                    desc={agentDescription(agent)}
+                    key={agent.id}
+                    last={index === agents.length - 1 && !error}
+                    title={agent.label}
+                >
+                    {agent.installed && agent.connection === 'stale' && (
+                        <Button
+                            disabled={busy !== null}
+                            onClick={() => void connect(agent, true)}
+                            size="sm"
+                        >
+                            Connect again
+                        </Button>
+                    )}
+                    {agent.installed && agent.connection !== 'stale' && (
+                        <Toggle
+                            label={`Connect ${agent.label} to Seam`}
+                            on={agent.connection === 'on'}
+                            onChange={(on) => void connect(agent, on)}
+                        />
+                    )}
+                </Row>
+            ))}
+            {error && (
+                <div
+                    className="pb-3.5 text-[12.5px] leading-normal whitespace-pre-wrap text-warn select-text"
+                    role="alert"
+                >
+                    {error}
+                </div>
+            )}
         </>
     );
 }

@@ -1,5 +1,13 @@
 // Mirrors src-tauri/src/git/models.rs (serde camelCase).
 
+/** An agent CLI, and whether it starts `seam mcp`: `stale` when it starts another copy of Seam. */
+export interface AgentConnection {
+    connection: 'off' | 'on' | 'stale';
+    id: Provider;
+    installed: boolean;
+    label: string;
+    server: string;
+}
 export interface AiConfig {
     baseUrl: string;
     model: string;
@@ -8,6 +16,7 @@ export interface AiConfig {
     /** Review a change opened with the `seam` command as soon as it opens. */
     reviewOnOpen: boolean;
 }
+
 export interface Branch {
     ahead: number;
     author: string;
