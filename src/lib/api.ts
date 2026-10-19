@@ -2,6 +2,7 @@ import { invoke } from '@tauri-apps/api/core';
 
 import type { Tab } from './store';
 import type {
+    AgentConnection,
     AiConfig,
     CliStatus,
     Commit,
@@ -61,6 +62,7 @@ export const api = {
     log: (root: string, reference: string, skip: number, limit: number) =>
         invoke<Commit[]>('log', { limit, reference, root, skip }),
     mainWorktree: (root: string) => invoke<null | string>('main_worktree', { root }),
+    mcpAgents: () => invoke<AgentConnection[]>('mcp_agents'),
     mergeBase: (root: string, first: string, second: string) =>
         invoke<null | string>('merge_base', { a: first, b: second, root }),
     notifyPrefs: () => invoke<NotifyPrefs>('notify_prefs'),
@@ -91,6 +93,8 @@ export const api = {
     setAiKey: (provider: Provider, key: string) => invoke<void>('set_ai_key', { key, provider }),
     setCliInstalled: (installed: boolean) => invoke<CliStatus>('set_cli_installed', { installed }),
     setGitPath: (path: null | string) => invoke<void>('set_git_path', { path }),
+    setMcpAgent: (id: Provider, on: boolean) =>
+        invoke<AgentConnection>('set_mcp_agent', { id, on }),
     setNotifyPrefs: (notify: NotifyPrefs) => invoke<void>('set_notify_prefs', { notify }),
     snapshot: (root: string) => invoke<Snapshot>('snapshot', { root }),
     sounds: () => invoke<string[]>('sounds'),
