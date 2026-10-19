@@ -27,14 +27,16 @@ lines, commit, stash, rename or remove commits, and undo any of it with ⌘Z.
 - **Settings** (⌘,): 18 themes with separate light and dark picks, accents, AI provider and review
   style. Expand any diff to fill the window with ⇧⌘E.
 
-- **Terminal**: `seam` opens any diff in Seam (the working tree, what is staged, a range, a pull or
-  merge request, a patch on stdin) and reviews or explains it with your agent, in the app or
-  right in the terminal with `--print`. Install the command from **Settings › General › Terminal**
+- **Terminal**: `seam .` opens the repository you are in, and `seam` alone lists every command.
+  It opens any diff in Seam (what is staged, a range, a pull or merge request, a patch on stdin)
+  and reviews or explains it with your agent, in the app or right in the terminal with `--print`.
+  Install the command from **Settings › General › Terminal**
   or **Seam › Install 'seam' Command in PATH**; it links `/usr/local/bin/seam` to a script inside
   the app, and macOS asks for your password where that folder is not writable.
 
 ```sh
-seam                          # working tree vs HEAD
+seam                          # the list of commands
+seam .                        # open this repository in Seam
 seam --staged                 # what you are about to commit
 seam main..HEAD -- src        # this branch against main, under src/
 seam pr 128                   # a pull request via gh, or a merge request via glab
