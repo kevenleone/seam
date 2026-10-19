@@ -276,9 +276,11 @@ function TerminalSection() {
             <Row
                 desc={
                     <>
-                        Run <span className="font-mono">{status.name} .</span> to open the
-                        repository you are in. Links /usr/local/bin/{status.name}; macOS may ask for
-                        your password.
+                        Run <span className="font-mono">{status.name}</span> in a repository to open
+                        its changes, <span className="font-mono">{status.name} review</span> to
+                        review them, and <span className="font-mono">{status.name} --help</span> for
+                        the rest. Links /usr/local/bin/{status.name}; macOS may ask for your
+                        password.
                     </>
                 }
                 last
@@ -545,6 +547,17 @@ export function AiPane() {
 
             <SectionLabel>Reviews</SectionLabel>
             <ReviewStyleRows review={config.review} save={(review) => save({ review })} />
+            <Row
+                desc="A diff opened with the seam command, such as seam main..HEAD, is reviewed as soon as it opens. Off, it opens without asking a model and seam review does the reviewing."
+                last
+                title="Review diffs opened from the terminal"
+            >
+                <Toggle
+                    label="Review diffs opened from the terminal"
+                    on={config.reviewOnOpen}
+                    onChange={(reviewOnOpen) => save({ reviewOnOpen })}
+                />
+            </Row>
         </>
     );
 }
@@ -693,7 +706,7 @@ function ReviewStyleRows({
                     value={review.level}
                 />
             </Row>
-            <Row last title="Write comments in">
+            <Row title="Write comments in">
                 <select
                     aria-label="Comment language"
                     className={SELECT}

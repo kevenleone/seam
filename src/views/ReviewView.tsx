@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import type { Finding, Review, Severity } from '../lib/types';
+import type { FileDiff, Finding, Review, Severity } from '../lib/types';
 
 import { RunBar } from '../components/ChangeOverview';
 import { DiffView } from '../components/DiffView';
@@ -30,11 +30,12 @@ export function ReviewView() {
         () => shown?.findings.filter((finding) => !dismissed.includes(finding.id)) ?? [],
         [shown, dismissed],
     );
+    const files = review.status === 'opened' ? review.diffs : shown?.diffs;
 
     return (
         <>
-            <Collapsible open={leftPanel && !expanded && !!shown} width={264}>
-                {shown && <ReviewFiles findings={findings} review={shown} />}
+            <Collapsible open={leftPanel && !expanded && !!files} width={264}>
+                {files && <ReviewFiles diffs={files} findings={findings} />}
             </Collapsible>
             <section aria-label="Review" className="flex min-w-0 flex-1 flex-col">
                 <ReviewHeader />
@@ -104,6 +105,15 @@ function ReviewBody({ findings, shown }: { findings: Finding[]; shown: null | Re
         return <WhileReviewing state={review} />;
     }
 
+    if (review.status === 'opened') {
+        return (
+            <DiffView
+                comments={{ findings: [], focus: reviewFocus, onDismiss: dismissFinding }}
+                diffs={review.diffs}
+            />
+        );
+    }
+
     const failure =
         review.status === 'failed' ? (
             <div
@@ -121,7 +131,7 @@ function ReviewBody({ findings, shown }: { findings: Finding[]; shown: null | Re
                 >
                     AI settings
                 </Button>
-                <Button onClick={() => startReview(review.provider)} size="sm">
+                <Button onClick={() => startReview(review.provider, review.target)} size="sm">
                     Try again
                 </Button>
             </div>
@@ -161,7 +171,7 @@ function ReviewBody({ findings, shown }: { findings: Finding[]; shown: null | Re
     );
 }
 
-function ReviewFiles({ findings, review }: { findings: Finding[]; review: Review }) {
+function ReviewFiles({ diffs, findings }: { diffs: FileDiff[]; findings: Finding[] }) {
     const { set } = useRepo();
 
     return (
@@ -169,8 +179,8 @@ function ReviewFiles({ findings, review }: { findings: Finding[]; review: Review
             aria-label="Reviewed files"
             className="flex h-full w-[264px] flex-col gap-0.5 overflow-auto border-r border-line bg-panel px-2 py-3.5"
         >
-            <SectionLabel className="px-2 pb-1.5">Files · {review.diffs.length}</SectionLabel>
-            {review.diffs.map((diff) => {
+            <SectionLabel className="px-2 pb-1.5">Files · {diffs.length}</SectionLabel>
+            {diffs.map((diff) => {
                 const path = diff.newPath ?? diff.oldPath ?? '';
                 const slash = path.lastIndexOf('/');
                 const count = findings.filter((finding) => finding.file === path).length;
@@ -205,7 +215,7 @@ function ReviewFiles({ findings, review }: { findings: Finding[]; review: Review
 }
 
 function ReviewHeader() {
-    const { review, startReview, status } = useRepo();
+    const { closeOpenedReview, review, startReview, status } = useRepo();
     const shown = review.status === 'done' ? review.review : null;
     const running = review.status === 'running';
     const stale = shown?.headSha && status.branch.oid && shown.headSha !== status.branch.oid;
@@ -214,6 +224,16 @@ function ReviewHeader() {
         <div className="flex shrink-0 flex-wrap items-center gap-2.5 border-b border-line px-[18px] py-2.5">
             {review.status === 'running' ? (
                 <ReviewRunStatus state={review} />
+            ) : review.status === 'opened' ? (
+                <>
+                    <span className="font-mono text-[12.5px]">{review.scope}</span>
+                    <span className="text-[12px] text-muted">
+                        {review.commits.length > 0 &&
+                            `${review.commits.length} commit${review.commits.length === 1 ? '' : 's'} · `}
+                        {review.diffs.length} file{review.diffs.length === 1 ? '' : 's'} · opened
+                        from the terminal
+                    </span>
+                </>
             ) : shown ? (
                 <>
                     <span className="font-mono text-[12.5px]">{shown.scope}</span>
@@ -243,12 +263,26 @@ function ReviewHeader() {
             >
                 <Icon name="gear" size={13} />
             </Button>
+            {review.status === 'opened' && (
+                <>
+                    <Button onClick={closeOpenedReview} size="sm" variant="ghost">
+                        Close
+                    </Button>
+                    <Button
+                        onClick={() => startReview(undefined, review.target)}
+                        size="sm"
+                        variant="primary"
+                    >
+                        <Icon name="sparkle" size={12} /> Review this change
+                    </Button>
+                </>
+            )}
             {shown && !running && (
-                <Button onClick={() => startReview()} size="sm">
+                <Button onClick={() => startReview(undefined, shown.target)} size="sm">
                     <Icon name="refresh" size={12} /> Re-run review
                 </Button>
             )}
-            {shown && <ExpandButton />}
+            {(shown || review.status === 'opened') && <ExpandButton />}
         </div>
     );
 }
