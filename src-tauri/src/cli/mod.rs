@@ -163,14 +163,14 @@ fn help(paint: Paint) -> String {
     };
     format!(
         "{} — open a git diff, review it with the agent you already use\n\n\
-         {}\n  seam [<range>] [--staged] [-- <path>…]\n\n\
+         {}\n  seam [<folder> | <range>] [--staged] [-- <path>…]\n\n\
          {}\n{}\n{}\n{}{}\n{}\n{}",
         paint.bold(CLI_NAME),
         paint.heading("USAGE"),
         paint.heading("OPEN"),
         rows(
             &[
-                ("seam", "working tree vs HEAD"),
+                ("seam .", "open this repository in Seam"),
                 ("seam --staged", "what you are about to commit"),
                 ("seam main..HEAD", "this branch against main"),
                 ("seam HEAD~3", "the last three commits"),
@@ -350,11 +350,6 @@ fn hand_off(app: &App, change: &Change, request: Request) -> Result<(), String> 
 
 async fn open(app: &App, subject: Subject, agent: Option<String>) -> Outcome {
     let agent = provider(agent)?;
-    let nothing_named = subject == Subject::default();
-    if nothing_named && repository().await.is_err() {
-        app.open(None)?;
-        return Ok(0);
-    }
     let change = match resolve(subject).await? {
         Opened::Folder(folder) => {
             app.open(Some(&folder))?;

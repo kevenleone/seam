@@ -58,7 +58,7 @@ enum Allowed {
 pub fn parse(args: &[String]) -> Result<Command, String> {
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let command = match args.split_first() {
-        Some((&("-h" | "--help" | "help"), _)) => Command::Help,
+        None | Some((&("-h" | "--help" | "help"), _)) => Command::Help,
         Some((&("-V" | "--version"), [])) => Command::Version,
         Some((&"doctor", rest)) => {
             no_more("doctor", rest)?;
@@ -223,7 +223,14 @@ mod tests {
 
     #[test]
     fn opens_every_kind_of_change() {
-        assert_eq!(parse_line("").unwrap(), open(Subject::default()));
+        assert_eq!(parse_line("").unwrap(), Command::Help);
+        assert_eq!(
+            parse_line(".").unwrap(),
+            open(Subject {
+                revision: Some(".".into()),
+                ..Default::default()
+            })
+        );
         assert_eq!(
             parse_line("--staged").unwrap(),
             open(Subject {
