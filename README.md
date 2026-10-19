@@ -44,6 +44,7 @@ git diff | seam -             # any patch on stdin
 seam review --print           # review in the terminal; exits 1 on a risk
 seam review --last            # open that review in the app
 seam explain HEAD~2 --print   # a plain-language summary of a commit
+seam show HEAD~2 --split      # a commit, highlighted in Seam's colours, side by side
 seam doctor                   # check git, the agents, gh/glab and the command
 seam git-install              # register as a git difftool: git difftool -d -t seam
 ```
@@ -51,6 +52,11 @@ seam git-install              # register as a git difftool: git difftool -d -t s
 `--agent claude|codex|opencode` (or any provider id) picks the model for one run. A diff opened
 from the terminal waits in the Review tab until you review it, unless **Settings › AI › Review
 diffs opened from the terminal** is on.
+
+`seam show` prints a commit the way `git show` does, paged through `less`. Code takes your
+terminal theme's own colours; changed lines are tinted with Seam's blue and orange, blended into
+the background your terminal reports. Set `SEAM_LAYOUT=split` to make side by side the default,
+and `SEAM_PAGER` (or `PAGER`) to use another pager.
 
 Everything runs natively: Rust shells out to your git and to the agents' CLIs, and calls the
 provider APIs directly. Keys stay in the macOS Keychain.
