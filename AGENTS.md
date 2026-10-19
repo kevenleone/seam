@@ -7,8 +7,8 @@ This file is the single source of truth for agent instructions in this repositor
 Seam is a desktop git client, Tauri 2 over the user's own `git`, for everyday
 work on a repository: stage single lines, commit, stash, rename or remove
 commits, and undo any of it with ⌘Z. It is the first pass of a larger design
-(AI review, agent sessions, pull requests, a three-way conflict view and a
-`seam` CLI come later); build toward that, not away from it.
+(AI review, agent sessions, pull requests, a three-way conflict view and
+`seam mcp` come later); build toward that, not away from it.
 
 The principles that decide arguments, in the order they usually come up:
 
@@ -124,6 +124,19 @@ repository) and `src/prefs.rs` what the host remembers in the app data folder
 (the AI configuration and recent repositories). The host owns both because the
 tray needs them with no window open. Closing the last window keeps Seam running;
 only Quit (⌘Q or the tray) exits.
+
+`src/cli/` is the `seam` command. It is the app's own binary: the launcher in
+`resources/seam` (what `/usr/local/bin/seam` links to) runs it with `--cli`, and
+`main.rs` hands those runs to `cli::main` before any Tauri app is built. A diff
+is named by a `review::Target` (`scope_of` turns one into a `Scope`); `src/forge.rs`
+reads pull and merge requests through `gh` or `glab`, picked by the remote's
+host. `--print` runs review and explain in the terminal. Otherwise the command
+leaves a request in `.git/seam/requests/` (`src/handoff.rs`) and has macOS
+`open` the folder; the app takes requests when a folder arrives, so a running
+app and a cold start behave alike. There is deliberately no URL scheme: any web
+page could fire one and start an agent run. A development build has no bundle
+to open, so it starts another copy of itself; try handoffs with `pnpm app:build`.
+`pnpm seam <args>` runs the command from the checkout.
 
 `src/lib.rs` is the Tauri side: commands, the welcome window and one window per
 repository (labelled by a hash of its path), the menu, the file watcher, and
