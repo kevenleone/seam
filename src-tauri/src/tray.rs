@@ -258,7 +258,9 @@ fn on_menu(app: &AppHandle, id: &str) {
                 crate::spawn_open(app, root.clone(), Some("review"));
                 let app = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    let _ = crate::start_review_task(&app, root, config).await;
+                    let _ =
+                        crate::start_review_task(&app, root, config, &crate::review::Target::Auto)
+                            .await;
                 });
             }
         }

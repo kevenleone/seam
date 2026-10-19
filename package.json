@@ -49,6 +49,7 @@
         "format:check": "prettier --check .",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
+        "seam": "cargo run --quiet --manifest-path src-tauri/Cargo.toml -- --cli",
         "site:build": "vite build site",
         "site:dev": "vite site",
         "site:preview": "vite preview site",

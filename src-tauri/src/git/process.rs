@@ -113,6 +113,11 @@ pub async fn base_env() -> &'static HashMap<String, String> {
         .await
 }
 
+/// For the `seam` command: a terminal already has the login shell's environment.
+pub fn inherit_env() {
+    let _ = SHELL_ENV.set(std::env::vars().collect());
+}
+
 async fn login_shell_env() -> Option<HashMap<String, String>> {
     let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/zsh".into());
     let marker = "__SEAM_ENV__";

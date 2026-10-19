@@ -9,7 +9,7 @@ use crate::ai::{self, AiConfig, Kind, Level, Provider};
 use crate::git::models::FileDiff;
 use crate::git::repo;
 use crate::git::{parse, GitError, Repo, Result};
-use crate::overview;
+use crate::{forge, overview};
 
 const MAX_DIFF_CHARS: usize = 400_000;
 const BASE_CANDIDATES: [&str; 4] = ["main", "master", "develop", "trunk"];
@@ -49,6 +49,8 @@ pub struct Review {
     pub truncated: bool,
     pub created_at: i64,
     pub duration_ms: u64,
+    #[serde(default)]
+    pub target: Target,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +70,14 @@ pub enum ReviewState {
         commits: Vec<String>,
         diffs: Vec<FileDiff>,
     },
+    /// A change opened from the `seam` command, shown without a review.
+    Opened {
+        scope: String,
+        commits: Vec<String>,
+        diffs: Vec<FileDiff>,
+        target: Target,
+        previous: Option<Review>,
+    },
     Done {
         review: Review,
     },
@@ -75,6 +85,47 @@ pub enum ReviewState {
         provider: Provider,
         message: String,
         previous: Option<Review>,
+        /// What to try again.
+        #[serde(default)]
+        target: Target,
+    },
+}
+
+/// Which change to look at. The app picks `Auto`; the `seam` command names one.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
+pub enum Target {
+    /// The branch against its base, else uncommitted changes.
+    #[default]
+    Auto,
+    WorkingTree {
+        #[serde(default)]
+        paths: Vec<String>,
+    },
+    Staged {
+        #[serde(default)]
+        paths: Vec<String>,
+    },
+    /// `a..b`, `a...b`, or a single revision meaning it up to HEAD.
+    Range {
+        range: String,
+        #[serde(default)]
+        paths: Vec<String>,
+    },
+    Commit {
+        rev: String,
+    },
+    /// A unified diff kept in `.git/seam/patches/`.
+    Patch {
+        file: PathBuf,
+        label: String,
+    },
+    PullRequest {
+        number: u32,
     },
 }
 
@@ -85,6 +136,7 @@ pub struct Scope {
     pub commits: Vec<String>,
     pub diff_text: String,
     pub diffs: Vec<FileDiff>,
+    pub target: Target,
 }
 
 pub fn now_secs() -> i64 {
@@ -147,6 +199,7 @@ pub async fn scope(repo: &Repo) -> Result<Scope> {
                     commits,
                     diffs: parse::diff(&diff_text),
                     diff_text,
+                    target: Target::Auto,
                 });
             }
         }
@@ -172,7 +225,91 @@ pub async fn scope(repo: &Repo) -> Result<Scope> {
         commits: vec![],
         diffs: parse::diff(&diff_text),
         diff_text,
+        target: Target::Auto,
     })
+}
+
+pub async fn scope_of(repo: &Repo, target: &Target) -> Result<Scope> {
+    let head_sha = repo.head().await;
+    let (label, commits, diff_text) = match target {
+        Target::Auto => return scope(repo).await,
+        Target::WorkingTree { paths } => {
+            let against = if head_sha.is_some() {
+                "HEAD"
+            } else {
+                repo::EMPTY_TREE
+            };
+            let diff_text = diff(repo, &[against], paths).await?;
+            ("Uncommitted changes".to_string(), vec![], diff_text)
+        }
+        Target::Staged { paths } => {
+            let diff_text = diff(repo, &["--cached"], paths).await?;
+            ("Staged changes".to_string(), vec![], diff_text)
+        }
+        Target::Range { range, paths } => {
+            let range = if range.contains("..") {
+                range.clone()
+            } else {
+                format!("{range}..HEAD")
+            };
+            let mut args = vec!["log", "--format=%h %s", &range, "--"];
+            args.extend(paths.iter().map(String::as_str));
+            let commits = text(repo, &args).await?.lines().map(String::from).collect();
+            let diff_text = diff(repo, &[&range], paths).await?;
+            (range, commits, diff_text)
+        }
+        Target::Commit { rev } => {
+            let line = text(repo, &["log", "-1", "--format=%h %s", rev, "--"]).await?;
+            let line = line.trim().to_string();
+            let diff_text = text(
+                repo,
+                &[
+                    "show",
+                    "--no-color",
+                    "--no-ext-diff",
+                    "-M",
+                    "--diff-merges=first-parent",
+                    "--format=",
+                    rev,
+                    "--",
+                ],
+            )
+            .await?;
+            let label = line.split(' ').next().unwrap_or(rev).to_string();
+            (label, vec![line], diff_text)
+        }
+        Target::Patch { file, label } => {
+            let diff_text = std::fs::read_to_string(file).map_err(|error| {
+                GitError::new(format!("Couldn't read {}: {error}", file.display()))
+            })?;
+            (label.clone(), vec![], diff_text)
+        }
+        Target::PullRequest { number } => {
+            let request = forge::pull_request(repo, *number).await?;
+            (request.label, request.commits, request.diff_text)
+        }
+    };
+    if diff_text.trim().is_empty() {
+        return Err(GitError::new(format!(
+            "Nothing to show: {label} has no changes."
+        )));
+    }
+    Ok(Scope {
+        label,
+        head_sha,
+        commits,
+        diffs: parse::diff(&diff_text),
+        diff_text,
+        target: target.clone(),
+    })
+}
+
+async fn diff(repo: &Repo, revisions: &[&str], paths: &[String]) -> Result<String> {
+    let mut args = vec!["diff", "--no-color", "--no-ext-diff", "-M"];
+    args.extend(revisions);
+    args.push("--");
+    args.extend(paths.iter().map(String::as_str));
+    text(repo, &args).await
 }
 
 const FOCUS: [(&str, &str); 6] = [
@@ -363,6 +500,7 @@ pub async fn run(config: &AiConfig, root: &Path, scope: Scope) -> Result<Review>
         truncated,
         created_at: now_secs(),
         duration_ms: started.elapsed().as_millis() as u64,
+        target: scope.target,
     })
 }
 
@@ -397,6 +535,7 @@ mod tests {
             commits: vec!["abc1234 Add a thing".into()],
             diff_text: String::new(),
             diffs: vec![],
+            target: Target::Auto,
         };
         let config = AiConfig::default();
         let with = prompt(&config, &scope, "diff", false, "About this project: P");
