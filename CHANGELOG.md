@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.8.0](https://github.com/kevenleone/seam/compare/v0.7.0...v0.8.0) (2026-10-19)
+
+
+### Features
+
+* **cli:** open the help with a Seam wordmark and the version ([483d971](https://github.com/kevenleone/seam/commit/483d971927fa75d51c69a4f6b53417b8564c3277))
+* **cli:** print a commit highlighted in the terminal with seam show ([8b7f0ef](https://github.com/kevenleone/seam/commit/8b7f0ef511a5b782da2ec76c9cce861e0555205d))
+
+
+### Documentation
+
+* describe seam show ([5e729aa](https://github.com/kevenleone/seam/commit/5e729aa824846c12a5a3626225b06eb3eac42ed2))
+
 ## [0.7.0](https://github.com/kevenleone/seam/compare/v0.6.0...v0.7.0) (2026-10-19)
 
 
