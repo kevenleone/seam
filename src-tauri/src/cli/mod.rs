@@ -200,13 +200,41 @@ fn show_help(paint: Paint) -> String {
     )
 }
 
+const WORDMARK: [&str; 5] = [
+    r"   _____",
+    r"  / ___/___  ____ _____ ___",
+    r"  \__ \/ _ \/ __ `/ __ `__ \",
+    r" ___/ /  __/ /_/ / / / / / /",
+    r"/____/\___/\__,_/_/ /_/ /_/",
+];
+
+fn banner(paint: Paint) -> String {
+    let tagline = format!(
+        "diffs, reviewed by your agent · v{}",
+        env!("CARGO_PKG_VERSION")
+    );
+    let last = WORDMARK.len() - 1;
+    WORDMARK
+        .iter()
+        .enumerate()
+        .map(|(index, line)| {
+            let line = paint.accent(line);
+            if index == last {
+                format!("{line}  {}\n", paint.dim(&tagline))
+            } else {
+                format!("{line}\n")
+            }
+        })
+        .collect()
+}
+
 fn help(paint: Paint) -> String {
     let rows = |rows: &[(&str, &str)], width: usize| table(paint, rows, width);
     format!(
-        "{} — open a git diff, review it with the agent you already use\n\n\
+        "{}\n\
          {}\n  seam [<folder> | <range>] [--staged] [-- <path>…]\n\n\
          {}\n{}\n{}\n{}{}\n{}\n{}{}\n{}\n{}",
-        paint.bold(CLI_NAME),
+        banner(paint),
         paint.heading("USAGE"),
         paint.heading("OPEN"),
         rows(
