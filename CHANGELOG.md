@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.7.0](https://github.com/kevenleone/seam/compare/v0.6.0...v0.7.0) (2026-10-19)
+
+
+### Features
+
+* **cli:** list the commands when seam runs bare, and open the repository with seam . ([af0046b](https://github.com/kevenleone/seam/commit/af0046bcbd159f35ba4a09773a5870d05451e144))
+* **cli:** open, review and explain diffs from the terminal with the seam command ([909c952](https://github.com/kevenleone/seam/commit/909c952ea31dd2d0a0bb98692566aaba83e2a9e0))
+* **ui:** show diffs opened from the terminal in the Review tab and review them on open ([3923c3d](https://github.com/kevenleone/seam/commit/3923c3dcbcf03fb12582338c7d949d782e299ef8))
+
+
+### Documentation
+
+* describe the seam command ([00d3d44](https://github.com/kevenleone/seam/commit/00d3d44772e75d66bd428e8a29e5b53b7ff127b8))
+
 ## [0.6.0](https://github.com/kevenleone/seam/compare/v0.5.0...v0.6.0) (2026-10-18)
 
 
