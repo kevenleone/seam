@@ -136,6 +136,10 @@ leaves a request in `.git/seam/requests/` (`src/handoff.rs`) and has macOS
 app and a cold start behave alike. There is deliberately no URL scheme: any web
 page could fire one and start an agent run. A development build has no bundle
 to open, so it starts another copy of itself; try handoffs with `pnpm app:build`.
+`seam show` stays in the terminal: `cli/highlight.rs` highlights with syntect
+over bat's syntax set (`two-face`) in the terminal's own sixteen colours, and
+tints changed lines by blending Seam's blue and orange into the background the
+terminal reports (OSC 11, `term::background`). No answer means no tints.
 `pnpm seam <args>` runs the command from the checkout.
 
 `src/lib.rs` is the Tauri side: commands, the welcome window and one window per
