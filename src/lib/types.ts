@@ -5,6 +5,8 @@ export interface AiConfig {
     model: string;
     provider: Provider;
     review: ReviewStyle;
+    /** Review a change opened with the `seam` command as soon as it opens. */
+    reviewOnOpen: boolean;
 }
 export interface Branch {
     ahead: number;
@@ -298,6 +300,7 @@ export interface Review {
     provider: Provider;
     scope: string;
     summary: string;
+    target: Target;
     truncated: boolean;
 }
 
@@ -314,7 +317,21 @@ export type ReviewState =
           startedAt: number;
           status: 'running';
       }
-    | { message: string; previous: null | Review; provider: Provider; status: 'failed' }
+    | {
+          commits: string[];
+          diffs: FileDiff[];
+          previous: null | Review;
+          scope: string;
+          status: 'opened';
+          target: Target;
+      }
+    | {
+          message: string;
+          previous: null | Review;
+          provider: Provider;
+          status: 'failed';
+          target: Target;
+      }
     | { review: Review; status: 'done' }
     | { status: 'idle' };
 
@@ -351,6 +368,16 @@ export interface Tag {
     name: string;
     sha: string;
 }
+
+/** Which change a review reads: the branch (`auto`), or one named by the `seam` command. */
+export type Target =
+    | { file: string; kind: 'patch'; label: string }
+    | { kind: 'auto' }
+    | { kind: 'commit'; rev: string }
+    | { kind: 'pullRequest'; number: number }
+    | { kind: 'range'; paths: string[]; range: string }
+    | { kind: 'staged'; paths: string[] }
+    | { kind: 'workingTree'; paths: string[] };
 
 export interface TestResult {
     durationMs: number;

@@ -19,6 +19,7 @@ import type {
     RepoStatus,
     ReviewState,
     Stash,
+    Target,
     VisualKind,
     VisualState,
     VisualSummary,
@@ -78,6 +79,8 @@ interface Actions {
     cancelOverview(): void;
     cancelReview(): void;
     cancelVisual(kind: VisualKind): void;
+    /** Leaves a change opened from the terminal for the review shown before it. */
+    closeOpenedReview(): void;
     commit(andPush?: boolean): void;
     dismissFinding(id: number): void;
     fetch(): void;
@@ -113,8 +116,11 @@ interface Actions {
     showDetail(detail: HistoryDetail | null): void;
     /** Writes the overview, or rewrites only `sections` of the one shown. */
     startOverview(sections?: string[], provider?: Provider): void;
-    /** Starts an AI review of the current branch with `provider`, or the one chosen in Settings. */
-    startReview(provider?: Provider): void;
+    /**
+     * Starts an AI review of `target` (the current branch when absent) with `provider`, or the
+     * one chosen in Settings.
+     */
+    startReview(provider?: Provider, target?: Target): void;
     /** Starts a visual recap of the branch, or a plan of the change `prompt` describes. */
     startVisual(kind: VisualKind, prompt?: string, provider?: Provider): void;
     toggleLine(hunk: number, line: number, range: boolean): void;
@@ -267,6 +273,9 @@ export const useRepo = create<RepoStore>()((set, get) => {
             void api.cancelVisual(get().root, kind);
         },
         checked: [],
+        closeOpenedReview() {
+            void api.closeOpenedReview(get().root);
+        },
         commit(andPush = false) {
             const { amend, body, busy, status, summary } = get();
             const s = summary.trim();
@@ -660,10 +669,12 @@ export const useRepo = create<RepoStore>()((set, get) => {
                 get().loadOverview(),
             );
         },
-        startReview(provider) {
+        startReview(provider, target) {
             set({ tab: 'review' });
             // A review that can't start is recorded as failed and shown in the Review tab.
-            api.startReview(get().root, provider ?? null).catch(() => get().loadReview());
+            api.startReview(get().root, provider ?? null, target ?? null).catch(() =>
+                get().loadReview(),
+            );
         },
         startVisual(kind, prompt, provider) {
             set({ tab: 'visual', visualKind: kind });

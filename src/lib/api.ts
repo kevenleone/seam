@@ -22,6 +22,7 @@ import type {
     ScopeSummary,
     Snapshot,
     Stash,
+    Target,
     TestResult,
     VisualKind,
     VisualState,
@@ -43,6 +44,8 @@ export const api = {
     cliStatus: () => invoke<CliStatus>('cli_status'),
     cloneRepository: (url: string, destination: string) =>
         invoke<void>('clone_repository', { destination, url }),
+    /** Back to the review shown before a change was opened from the terminal. */
+    closeOpenedReview: (root: string) => invoke<void>('close_opened_review', { root }),
     commitDetail: (root: string, sha: string, ignoreWhitespace: boolean) =>
         invoke<Detail>('commit_detail', { ignoreWhitespace, root, sha }),
     /** Resolves `false` when the save panel was dismissed. */
@@ -94,8 +97,8 @@ export const api = {
     /** With `sections`, rewrites only those of the overview shown. */
     startOverview: (root: string, sections: null | string[], provider: null | Provider) =>
         invoke<void>('start_overview', { provider, root, sections }),
-    startReview: (root: string, provider: null | Provider) =>
-        invoke<void>('start_review', { provider, root }),
+    startReview: (root: string, provider: null | Provider, target: null | Target) =>
+        invoke<void>('start_review', { provider, root, target }),
     startVisual: (
         root: string,
         kind: VisualKind,
