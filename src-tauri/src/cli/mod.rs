@@ -1,7 +1,9 @@
 mod args;
 mod difftool;
 mod doctor;
+mod highlight;
 pub mod install;
+mod show;
 mod term;
 
 use std::io::{IsTerminal, Read};
@@ -125,6 +127,10 @@ async fn run(command: Command) -> Outcome {
             print!("{}", help(Paint::stdout()));
             Ok(0)
         }
+        Command::ShowHelp => {
+            print!("{}", show_help(Paint::stdout()));
+            Ok(0)
+        }
         Command::Version => {
             println!("{CLI_NAME} {}", env!("CARGO_PKG_VERSION"));
             Ok(0)
@@ -145,6 +151,7 @@ async fn run(command: Command) -> Outcome {
             agent,
             print,
         } => explain(&app, revision, agent, print).await,
+        Command::Show(options) => show::run(options).await,
         Command::Doctor => Ok(doctor::run(&app).await),
         Command::GitInstall { default, uninstall } => git_install(default, uninstall).await,
         Command::Difftool {
@@ -155,16 +162,50 @@ async fn run(command: Command) -> Outcome {
     }
 }
 
+fn table(paint: Paint, rows: &[(&str, &str)], width: usize) -> String {
+    rows.iter()
+        .map(|(usage, what)| format!("  {usage:width$}  {}\n", paint.dim(what)))
+        .collect()
+}
+
+fn show_help(paint: Paint) -> String {
+    format!(
+        "{} — a commit, highlighted, in the terminal\n\n\
+         {}\n  seam show [<commit>] [--split | --unified] [--no-pager] [-- <path>…]\n\n\
+         {}\n{}\n{}\n{}",
+        paint.bold(&format!("{CLI_NAME} show")),
+        paint.heading("USAGE"),
+        paint.heading("OPTIONS"),
+        table(
+            paint,
+            &[
+                ("<commit>", "any revision git knows; HEAD when left out"),
+                ("--split", "old and new side by side"),
+                ("--unified", "one column, the default"),
+                ("--no-pager", "print straight to the terminal"),
+                ("-- <path>…", "only these files or folders"),
+            ],
+            20,
+        ),
+        paint.heading("ENVIRONMENT"),
+        table(
+            paint,
+            &[
+                ("SEAM_LAYOUT", "split or unified, when no option says"),
+                ("SEAM_PAGER, PAGER", "the pager; less -FRX otherwise"),
+                ("NO_COLOR", "print without colour"),
+            ],
+            20,
+        ),
+    )
+}
+
 fn help(paint: Paint) -> String {
-    let rows = |rows: &[(&str, &str)], width: usize| -> String {
-        rows.iter()
-            .map(|(usage, what)| format!("  {usage:width$}  {}\n", paint.dim(what)))
-            .collect()
-    };
+    let rows = |rows: &[(&str, &str)], width: usize| table(paint, rows, width);
     format!(
         "{} — open a git diff, review it with the agent you already use\n\n\
          {}\n  seam [<folder> | <range>] [--staged] [-- <path>…]\n\n\
-         {}\n{}\n{}\n{}{}\n{}\n{}",
+         {}\n{}\n{}\n{}{}\n{}\n{}{}\n{}\n{}",
         paint.bold(CLI_NAME),
         paint.heading("USAGE"),
         paint.heading("OPEN"),
@@ -201,6 +242,21 @@ fn help(paint: Paint) -> String {
                     "override the default agent"
                 ),
                 ("  --print", "stay in the terminal, no window"),
+            ],
+            32,
+        ),
+        paint.heading("READ"),
+        rows(
+            &[(
+                "seam show [<commit>]",
+                "a commit, highlighted, in the terminal"
+            )],
+            26,
+        ),
+        rows(
+            &[
+                ("  --split | --unified", "side by side, or one column"),
+                ("  --help", "every option of show"),
             ],
             32,
         ),
