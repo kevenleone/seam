@@ -8,9 +8,25 @@ pub struct Subject {
     pub paths: Vec<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Layout {
+    Unified,
+    Split,
+}
+
+/// A commit printed in the terminal; with no layout given, `SEAM_LAYOUT` picks it.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Show {
+    pub revision: String,
+    pub layout: Option<Layout>,
+    pub pager: bool,
+    pub paths: Vec<String>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum Command {
     Help,
+    ShowHelp,
     Version,
     Open {
         subject: Subject,
@@ -27,6 +43,7 @@ pub enum Command {
         agent: Option<String>,
         print: bool,
     },
+    Show(Show),
     Doctor,
     GitInstall {
         default: bool,
@@ -58,6 +75,7 @@ enum Allowed {
 pub fn parse(args: &[String]) -> Result<Command, String> {
     let args: Vec<&str> = args.iter().map(String::as_str).collect();
     let command = match args.split_first() {
+        Some((&"help", [topic])) if *topic == "show" => Command::ShowHelp,
         None | Some((&("-h" | "--help" | "help"), _)) => Command::Help,
         Some((&("-V" | "--version"), [])) => Command::Version,
         Some((&"doctor", rest)) => {
@@ -65,6 +83,7 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
             Command::Doctor
         }
         Some((&"git-install", rest)) => git_install(rest)?,
+        Some((&"show", rest)) => show(rest)?,
         Some((&"--difftool", rest)) => match rest {
             [left, right] => Command::Difftool {
                 left: left.to_string(),
@@ -142,6 +161,48 @@ fn git_install(rest: &[&str]) -> Result<Command, String> {
         return Err("--default and --uninstall don't go together".into());
     }
     Ok(Command::GitInstall { default, uninstall })
+}
+
+fn show(rest: &[&str]) -> Result<Command, String> {
+    let mut show = Show {
+        revision: String::new(),
+        layout: None,
+        pager: true,
+        paths: vec![],
+    };
+    let mut revision = None;
+    let mut rest = rest.iter();
+    while let Some(&argument) = rest.next() {
+        let layout = match argument {
+            "--split" => Some(Layout::Split),
+            "--unified" => Some(Layout::Unified),
+            _ => None,
+        };
+        if let Some(layout) = layout {
+            if show.layout.is_some_and(|chosen| chosen != layout) {
+                return Err("--split and --unified don't go together".into());
+            }
+            show.layout = Some(layout);
+            continue;
+        }
+        match argument {
+            "--" => {
+                show.paths = rest.map(|path| path.to_string()).collect();
+                break;
+            }
+            "-h" | "--help" => return Ok(Command::ShowHelp),
+            "--no-pager" => show.pager = false,
+            _ if argument.starts_with('-') => return Err(format!("unknown option `{argument}`")),
+            _ if revision.is_none() => revision = Some(argument.to_string()),
+            _ => {
+                return Err(format!(
+                    "show takes one commit, got `{argument}` too (paths go after `--`)"
+                ))
+            }
+        }
+    }
+    show.revision = revision.unwrap_or_else(|| "HEAD".into());
+    Ok(Command::Show(show))
 }
 
 fn flags(args: &[&str], allowed: Allowed) -> Result<Flags, String> {
@@ -310,6 +371,29 @@ mod tests {
     }
 
     #[test]
+    fn shows_a_commit_in_either_layout() {
+        let show = |line: &str| match parse_line(line).unwrap() {
+            Command::Show(show) => show,
+            other => panic!("{line}: {other:?}"),
+        };
+        let plain = show("show");
+        assert_eq!(plain.revision, "HEAD");
+        assert_eq!(plain.layout, None);
+        assert!(plain.pager);
+
+        let split = show("show abc123 --split --no-pager -- src");
+        assert_eq!(split.revision, "abc123");
+        assert_eq!(split.layout, Some(Layout::Split));
+        assert!(!split.pager);
+        assert_eq!(split.paths, ["src"]);
+
+        assert_eq!(parse_line("show -h").unwrap(), Command::ShowHelp);
+        assert_eq!(parse_line("show HEAD --help").unwrap(), Command::ShowHelp);
+        assert_eq!(parse_line("help show").unwrap(), Command::ShowHelp);
+        assert_eq!(parse_line("help").unwrap(), Command::Help);
+    }
+
+    #[test]
     fn knows_its_setup_commands() {
         assert_eq!(parse_line("--help").unwrap(), Command::Help);
         assert_eq!(parse_line("review -h").unwrap(), Command::Help);
@@ -346,6 +430,10 @@ mod tests {
             "doctor now",
             "git-install --default --uninstall",
             "--agent",
+            "show a b",
+            "show --split --unified",
+            "show --theme light",
+            "show --print",
         ] {
             assert!(parse_line(line).is_err(), "{line}");
         }
