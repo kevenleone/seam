@@ -4,6 +4,7 @@ pub mod explain;
 pub mod forge;
 pub mod git;
 pub mod handoff;
+pub mod mcp;
 mod notify;
 pub mod overview;
 mod prefs;
