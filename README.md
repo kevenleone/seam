@@ -47,6 +47,7 @@ seam explain HEAD~2 --print   # a plain-language summary of a commit
 seam show HEAD~2 --split      # a commit, highlighted in Seam's colours, side by side
 seam doctor                   # check git, the agents, gh/glab and the command
 seam git-install              # register as a git difftool: git difftool -d -t seam
+seam mcp install              # let Claude Code, Codex and OpenCode open diffs and leave comments
 ```
 
 `--agent claude|codex|opencode` (or any provider id) picks the model for one run. A diff opened
@@ -57,6 +58,13 @@ diffs opened from the terminal** is on.
 terminal theme's own colours; changed lines are tinted with Seam's blue and orange, blended into
 the background your terminal reports. Set `SEAM_LAYOUT=split` to make side by side the default,
 and `SEAM_PAGER` (or `PAGER`) to use another pager.
+
+`seam mcp` is an MCP server for the coding agent you already use. Through it, an agent reads a
+change (`get_diff`), shows it to you in Seam (`open_diff`), leaves review comments that open in
+the Review tab beside the diff (`leave_comments`), and reads Seam's last review to act on it
+(`get_review`). `seam mcp install` registers it with every agent it finds, or name one
+(`seam mcp install claude`); **Settings › AI › Agents** does the same with a switch per agent,
+and `seam mcp` alone says which are connected.
 
 Everything runs natively: Rust shells out to your git and to the agents' CLIs, and calls the
 provider APIs directly. Keys stay in the macOS Keychain.

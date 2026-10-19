@@ -7,8 +7,8 @@ This file is the single source of truth for agent instructions in this repositor
 Seam is a desktop git client, Tauri 2 over the user's own `git`, for everyday
 work on a repository: stage single lines, commit, stash, rename or remove
 commits, and undo any of it with ⌘Z. It is the first pass of a larger design
-(AI review, agent sessions, pull requests, a three-way conflict view and
-`seam mcp` come later); build toward that, not away from it.
+(AI review, agent sessions, pull requests and a three-way conflict view come
+later); build toward that, not away from it.
 
 The principles that decide arguments, in the order they usually come up:
 
@@ -141,6 +141,17 @@ over bat's syntax set (`two-face`) in the terminal's own sixteen colours, and
 tints changed lines by blending Seam's blue and orange into the background the
 terminal reports (OSC 11, `term::background`). No answer means no tints.
 `pnpm seam <args>` runs the command from the checkout.
+
+`src/mcp/` is `seam mcp`, the MCP server agents start: newline-delimited
+JSON-RPC on stdio, hand-written like the rest (`mod.rs`), with no SDK. Its tools
+(`tools.rs`) read a diff, open one in the app, leave comments and read them back;
+comments are saved as the repository's review and shown through the same
+request-file handoff, so stdout carries nothing but protocol. `agents.rs`
+registers the server with Claude Code and Codex through their own `mcp add` and
+`mcp remove`, and with OpenCode by editing its config, which it refuses to do when
+the file has comments it would lose. Both `seam mcp install` and Settings › AI ›
+Agents use it. A bundled app registers the launcher inside the bundle, a
+development build its own binary.
 
 `src/lib.rs` is the Tauri side: commands, the welcome window and one window per
 repository (labelled by a hash of its path), the menu, the file watcher, and
