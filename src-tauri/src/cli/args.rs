@@ -24,6 +24,15 @@ pub struct Show {
 }
 
 #[derive(Debug, PartialEq, Eq)]
+pub enum McpCommand {
+    /// What an agent starts: the server, on stdin and stdout.
+    Serve,
+    Status,
+    Install(Vec<String>),
+    Uninstall(Vec<String>),
+}
+
+#[derive(Debug, PartialEq, Eq)]
 pub enum Command {
     Help,
     ShowHelp,
@@ -45,6 +54,7 @@ pub enum Command {
     },
     Show(Show),
     Doctor,
+    Mcp(McpCommand),
     GitInstall {
         default: bool,
         uninstall: bool,
@@ -83,6 +93,7 @@ pub fn parse(args: &[String]) -> Result<Command, String> {
             Command::Doctor
         }
         Some((&"git-install", rest)) => git_install(rest)?,
+        Some((&"mcp", rest)) => mcp(rest)?,
         Some((&"show", rest)) => show(rest)?,
         Some((&"--difftool", rest)) => match rest {
             [left, right] => Command::Difftool {
@@ -146,6 +157,31 @@ fn no_more(command: &str, rest: &[&str]) -> Result<(), String> {
         None => Ok(()),
         Some(extra) => Err(format!("{command} takes no arguments, got `{extra}`")),
     }
+}
+
+fn mcp(rest: &[&str]) -> Result<Command, String> {
+    let agents = |rest: &[&str]| -> Result<Vec<String>, String> {
+        match rest.iter().find(|argument| argument.starts_with('-')) {
+            Some(option) => Err(format!("unknown option `{option}`")),
+            None => Ok(rest.iter().map(|agent| agent.to_string()).collect()),
+        }
+    };
+    let command = match rest.split_first() {
+        None => McpCommand::Serve,
+        Some((&("-h" | "--help"), _)) => return Ok(Command::Help),
+        Some((&"status", rest)) => {
+            no_more("mcp status", rest)?;
+            McpCommand::Status
+        }
+        Some((&"install", rest)) => McpCommand::Install(agents(rest)?),
+        Some((&"uninstall", rest)) => McpCommand::Uninstall(agents(rest)?),
+        Some((other, _)) => {
+            return Err(format!(
+                "mcp takes install, uninstall or status, not `{other}`"
+            ))
+        }
+    };
+    Ok(Command::Mcp(command))
 }
 
 fn git_install(rest: &[&str]) -> Result<Command, String> {
@@ -416,6 +452,23 @@ mod tests {
     }
 
     #[test]
+    fn serves_and_installs_mcp() {
+        assert_eq!(parse_line("mcp").unwrap(), Command::Mcp(McpCommand::Serve));
+        assert_eq!(
+            parse_line("mcp status").unwrap(),
+            Command::Mcp(McpCommand::Status)
+        );
+        assert_eq!(
+            parse_line("mcp install").unwrap(),
+            Command::Mcp(McpCommand::Install(vec![]))
+        );
+        assert_eq!(
+            parse_line("mcp uninstall claude codex").unwrap(),
+            Command::Mcp(McpCommand::Uninstall(vec!["claude".into(), "codex".into()]))
+        );
+    }
+
+    #[test]
     fn refuses_what_does_not_make_sense() {
         for line in [
             "main..HEAD --staged",
@@ -434,6 +487,9 @@ mod tests {
             "show --split --unified",
             "show --theme light",
             "show --print",
+            "mcp serve",
+            "mcp install --all",
+            "mcp status now",
         ] {
             assert!(parse_line(line).is_err(), "{line}");
         }

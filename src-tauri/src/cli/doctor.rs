@@ -4,6 +4,7 @@ use crate::ai::{self, Kind};
 use crate::forge::{self, Forge};
 use crate::git::process::{git, git_executable, RunOptions};
 use crate::git::Repo;
+use crate::mcp::agents::{self, Connection, Launch};
 
 struct Row {
     ok: bool,
@@ -121,6 +122,26 @@ pub async fn run(app: &App) -> i32 {
             None => "not registered (seam git-install)".into(),
         },
     });
+
+    if let Some(launch) = Launch::current() {
+        let name = agents::server_name(&app.identifier);
+        for status in agents::statuses(&name, &launch).await {
+            if !status.installed {
+                continue;
+            }
+            rows.push(Row {
+                ok: status.connection == Connection::On,
+                name: format!("mcp {}", status.id),
+                detail: match status.connection {
+                    Connection::On => format!("connected as {name}"),
+                    Connection::Off => format!("not connected (seam mcp install {})", status.id),
+                    Connection::Stale => {
+                        format!("starts another copy (seam mcp install {})", status.id)
+                    }
+                },
+            });
+        }
+    }
 
     rows.push(Row {
         ok: app.bundle.is_some(),

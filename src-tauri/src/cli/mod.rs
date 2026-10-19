@@ -3,6 +3,7 @@ mod difftool;
 mod doctor;
 mod highlight;
 pub mod install;
+mod mcp;
 mod show;
 mod term;
 
@@ -24,14 +25,15 @@ pub use install::CLI_NAME;
 type Outcome = Result<i32, String>;
 
 /// The app this binary belongs to: its name, where it keeps its preferences, and its bundle.
+#[derive(Clone)]
 pub(crate) struct App {
     pub name: String,
-    identifier: String,
+    pub identifier: String,
     pub bundle: Option<PathBuf>,
 }
 
 impl App {
-    fn current() -> Self {
+    pub fn current() -> Self {
         let context = crate::context();
         let config = context.config();
         App {
@@ -70,11 +72,15 @@ impl App {
 
     /// Through `open`, so a running app receives the folder the way it does from Finder.
     /// A development build has no bundle to open, so it starts another copy of itself.
-    fn open(&self, folder: Option<&Path>) -> Result<(), String> {
+    pub fn open(&self, folder: Option<&Path>) -> Result<(), String> {
         let result = match &self.bundle {
             Some(bundle) => {
                 let mut command = std::process::Command::new("/usr/bin/open");
-                command.arg("-a").arg(bundle).args(folder);
+                command
+                    .arg("-a")
+                    .arg(bundle)
+                    .args(folder)
+                    .stdout(Stdio::null());
                 command.status().and_then(|status| {
                     status
                         .success()
@@ -153,6 +159,7 @@ async fn run(command: Command) -> Outcome {
         } => explain(&app, revision, agent, print).await,
         Command::Show(options) => show::run(options).await,
         Command::Doctor => Ok(doctor::run(&app).await),
+        Command::Mcp(command) => mcp::run(&app, command).await,
         Command::GitInstall { default, uninstall } => git_install(default, uninstall).await,
         Command::Difftool {
             left,
@@ -293,6 +300,11 @@ fn help(paint: Paint) -> String {
             &[
                 ("seam doctor", "find agents on PATH, check git"),
                 ("seam git-install", "register as git difftool"),
+                ("seam mcp", "let agents open diffs and leave comments"),
+                (
+                    "seam mcp install",
+                    "connect Claude Code, Codex and OpenCode"
+                ),
             ],
             26,
         ),
