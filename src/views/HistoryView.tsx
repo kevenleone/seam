@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
 
 import type { Branch, Commit } from '../lib/types';
 
@@ -138,6 +138,40 @@ function commitActions(commit: Commit, current: boolean): (readonly [string, () 
     ];
 }
 
+function CommitBody({ body }: { body: string }) {
+    const ref = useRef<HTMLParagraphElement>(null);
+    const [open, setOpen] = useState(false);
+    const [clipped, setClipped] = useState(false);
+
+    useLayoutEffect(() => {
+        const element = ref.current;
+
+        if (element && !open) {
+            setClipped(element.scrollHeight > element.clientHeight);
+        }
+    }, [body, open]);
+
+    return (
+        <div className="flex flex-col items-start gap-1">
+            <p
+                className={`selectable m-0 whitespace-pre-wrap text-soft ${open ? '' : 'line-clamp-4'}`}
+                ref={ref}
+            >
+                {body}
+            </p>
+            {(clipped || open) && (
+                <button
+                    className="text-[12px] text-accent hover:text-accent-strong"
+                    onClick={() => setOpen((previous) => !previous)}
+                    type="button"
+                >
+                    {open ? 'Show less' : 'Show more'}
+                </button>
+            )}
+        </div>
+    );
+}
+
 function CommitList() {
     const s = useRepo();
     const { baseBranch, baseCommit, checked, commits, detail, hasMore, historyRef, meta, status } =
@@ -224,10 +258,15 @@ function CommitList() {
                 </div>
             ) : (
                 <div className="flex items-center gap-2 border-b border-line px-3.5 py-2.5">
-                    <span className="font-mono text-[12.5px] font-semibold">{refName}</span>
+                    <span
+                        className="min-w-0 truncate font-mono text-[12.5px] font-semibold"
+                        title={refName}
+                    >
+                        {refName}
+                    </span>
                     {!current && (
                         <button
-                            className="text-[12px] text-accent hover:text-accent-strong"
+                            className="shrink-0 text-[12px] whitespace-nowrap text-accent hover:text-accent-strong"
                             onClick={() => s.viewHistory('HEAD')}
                             type="button"
                         >
@@ -235,7 +274,7 @@ function CommitList() {
                         </button>
                     )}
                     <span className="flex-1" />
-                    <span className="truncate text-[12px] text-muted">
+                    <span className="min-w-0 shrink-[4] truncate text-[12px] text-muted">
                         ⌘-click or ⇧-click commits to squash, remove or cherry-pick them.
                     </span>
                 </div>
@@ -380,7 +419,7 @@ function Detail() {
                 <h2 className="selectable m-0 text-[16px] leading-snug font-semibold">
                     {c.subject}
                 </h2>
-                {c.body && <p className="selectable m-0 whitespace-pre-wrap text-soft">{c.body}</p>}
+                {c.body && <CommitBody body={c.body} key={c.sha} />}
                 <span className="text-[12px] text-muted">
                     {c.authorName} &lt;{c.authorEmail}&gt; ·{' '}
                     {new Date(c.date * 1000).toLocaleString()}
