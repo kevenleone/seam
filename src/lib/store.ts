@@ -455,7 +455,7 @@ export const useRepo = create<RepoStore>()((set, get) => {
         },
 
         openWorktree(path, tab) {
-            api.openRepository(path, tab).then(
+            api.openRepository(path, tab, false).then(
                 () => {
                     if (getSettings().worktreeReplacesWindow) {
                         void getCurrentWindow().close();

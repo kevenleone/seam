@@ -175,7 +175,13 @@ fn open_settings_window(app: AppHandle, pane: Option<String>) {
 }
 
 /// Opens (or focuses) the window for the repository containing `path`, optionally on a tab.
-async fn open_repo_window(app: &AppHandle, path: &Path, tab: Option<&str>) -> CmdResult<()> {
+/// `remember` adds it to the recent repositories; switching to a worktree doesn't.
+async fn open_repo_window(
+    app: &AppHandle,
+    path: &Path,
+    tab: Option<&str>,
+    remember: bool,
+) -> CmdResult<()> {
     let root = Repo::top_level(path).await.ok_or_else(|| {
         GitError::new(format!("{} isn't inside a git repository.", path.display()))
     })?;
@@ -217,8 +223,10 @@ async fn open_repo_window(app: &AppHandle, path: &Path, tab: Option<&str>) -> Cm
         .unwrap()
         .insert(label, root.clone());
     *app.state::<AppState>().last_repo.lock().unwrap() = Some(root.clone());
-    app.state::<PrefsStore>().add_recent(&root);
-    let _ = app.emit("recent-opened", root.to_string_lossy());
+    if remember {
+        app.state::<PrefsStore>().add_recent(&root);
+        let _ = app.emit("recent-opened", root.to_string_lossy());
+    }
     tray::refresh(app);
     Ok(())
 }
@@ -227,7 +235,7 @@ async fn open_repo_window(app: &AppHandle, path: &Path, tab: Option<&str>) -> Cm
 fn spawn_open(app: &AppHandle, root: PathBuf, tab: Option<&'static str>) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = open_repo_window(&app, &root, tab).await {
+        if let Err(e) = open_repo_window(&app, &root, tab, true).await {
             app.dialog()
                 .message(e.message)
                 .title("Couldn't open repository")
@@ -252,7 +260,7 @@ fn pick_and_open(app: &AppHandle) {
                 return;
             };
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = open_repo_window(&handle, &path, None).await {
+                if let Err(e) = open_repo_window(&handle, &path, None, true).await {
                     handle
                         .dialog()
                         .message(e.message)
@@ -266,8 +274,19 @@ fn pick_and_open(app: &AppHandle) {
 // MARK: Commands: windows
 
 #[tauri::command]
-async fn open_repository(app: AppHandle, path: String, tab: Option<String>) -> CmdResult<()> {
-    open_repo_window(&app, Path::new(&path), tab.as_deref()).await
+async fn open_repository(
+    app: AppHandle,
+    path: String,
+    tab: Option<String>,
+    recent: Option<bool>,
+) -> CmdResult<()> {
+    open_repo_window(
+        &app,
+        Path::new(&path),
+        tab.as_deref(),
+        recent.unwrap_or(true),
+    )
+    .await
 }
 
 #[tauri::command]
@@ -306,7 +325,7 @@ async fn clone_repository(
     };
     let dest = PathBuf::from(&destination);
     Repo::clone_into(&url, &dest, &progress).await?;
-    open_repo_window(&app, &dest, None).await
+    open_repo_window(&app, &dest, None, true).await
 }
 
 #[tauri::command]
@@ -673,7 +692,7 @@ fn config_with(app: &AppHandle, provider: Option<Provider>) -> AiConfig {
 /// Opens the repository at `path` and does what the `seam` command left for it, if anything.
 async fn open_requested(app: &AppHandle, path: &Path) -> CmdResult<()> {
     let Some(root) = Repo::top_level(path).await else {
-        return open_repo_window(app, path, None).await;
+        return open_repo_window(app, path, None, true).await;
     };
     let requests = match Repo::new(&root).git_dir().await {
         Ok(dir) => handoff::take(&dir),
@@ -683,7 +702,7 @@ async fn open_requested(app: &AppHandle, path: &Path) -> CmdResult<()> {
         handoff::Action::Explain => "visual",
         _ => "review",
     });
-    open_repo_window(app, &root, tab).await?;
+    open_repo_window(app, &root, tab, true).await?;
     for request in requests {
         let config = config_with(app, request.provider);
         match request.action {

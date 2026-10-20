@@ -66,8 +66,8 @@ export const api = {
     notifyPrefs: () => invoke<NotifyPrefs>('notify_prefs'),
     openFolderDialog: () => invoke<void>('open_folder_dialog'),
     openOverview: (root: string, id: string) => invoke<void>('open_overview', { id, root }),
-    openRepository: (path: string, tab?: Tab) =>
-        invoke<void>('open_repository', { path, tab: tab ?? null }),
+    openRepository: (path: string, tab?: Tab, recent?: boolean) =>
+        invoke<void>('open_repository', { path, recent: recent ?? null, tab: tab ?? null }),
     openSettingsWindow: (pane: null | string) => invoke<void>('open_settings_window', { pane }),
     openVisual: (root: string, kind: VisualKind, id: string) =>
         invoke<void>('open_visual', { id, kind, root }),
