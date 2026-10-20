@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.9.0](https://github.com/kevenleone/seam/compare/v0.8.0...v0.9.0) (2026-10-20)
+
+
+### Features
+
+* **mcp:** let agents read diffs, open them in Seam and leave comments with seam mcp ([4b2c3d3](https://github.com/kevenleone/seam/commit/4b2c3d343c4b174a7c8b29b10b9c17fc85bf9f1b))
+* **settings:** connect Claude Code, Codex and OpenCode to seam mcp from the AI pane ([449f753](https://github.com/kevenleone/seam/commit/449f75396722f328332598968a1ccb548cfd3032))
+
+
+### Bug Fixes
+
+* **history:** truncate long branch names and clamp commit bodies ([879b294](https://github.com/kevenleone/seam/commit/879b29488c062b963b1de071f84b7415aa5b5214))
+* keep worktree switches out of recent projects ([e83c3f5](https://github.com/kevenleone/seam/commit/e83c3f5ebdc236a6ee77caf67940a02db61c8950))
+
+
+### Documentation
+
+* describe seam mcp and connecting agents to it ([7b6613a](https://github.com/kevenleone/seam/commit/7b6613ae566a080edbb9bbd477cb1c38e763fc0a))
+
 ## [0.8.0](https://github.com/kevenleone/seam/compare/v0.7.0...v0.8.0) (2026-10-19)
 
 
