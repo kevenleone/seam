@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 
 import type { VisualCanvas, VisualScreen } from '../../lib/types';
 
@@ -9,12 +9,11 @@ import {
     sketchHtml,
     surfaceOf,
 } from '../../lib/visual';
+import { Board } from './Board';
 import { Inline } from './Markdown';
 import { useVisual } from './mode';
 
 const PRINT_WIDTH = 720;
-const MIN_ZOOM = 0.2;
-const MAX_ZOOM = 2;
 
 const STATE_LABELS = { after: 'After', before: 'Before', proposed: 'Proposed' };
 
@@ -28,7 +27,7 @@ export function Canvas({ canvas, framed = true }: { canvas: VisualCanvas; framed
     }
 
     if (mode === 'app') {
-        return <Board canvas={canvas} framed={framed} layout={layout} />;
+        return <CanvasBoard canvas={canvas} framed={framed} layout={layout} />;
     }
 
     const scale = Math.min(1, PRINT_WIDTH / layout.width);
@@ -120,194 +119,6 @@ export function StateChip({ state }: { state: NonNullable<VisualScreen['state']>
     );
 }
 
-function Board({
-    canvas,
-    framed,
-    layout,
-}: {
-    canvas: VisualCanvas;
-    framed: boolean;
-    layout: CanvasLayout;
-}) {
-    const viewport = useRef<HTMLDivElement>(null);
-    const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
-    const drag = useRef<{ x: number; y: number } | null>(null);
-    const moved = useRef(false);
-
-    const fit = () => {
-        const element = viewport.current;
-
-        if (!element) {
-            return;
-        }
-
-        moved.current = false;
-
-        const zoom = Math.max(
-            MIN_ZOOM,
-            Math.min(1, element.clientWidth / layout.width, element.clientHeight / layout.height),
-        );
-
-        setView({
-            x: (element.clientWidth - layout.width * zoom) / 2,
-            y: Math.max(0, (element.clientHeight - layout.height * zoom) / 2),
-            zoom,
-        });
-    };
-
-    useLayoutEffect(fit, [layout]);
-
-    // Until the reader moves the board, it stays fitted as the window and panels change size.
-    useEffect(() => {
-        const element = viewport.current;
-
-        if (!element) {
-            return;
-        }
-
-        const observer = new ResizeObserver(() => !moved.current && fit());
-
-        observer.observe(element);
-
-        return () => observer.disconnect();
-    });
-
-    useEffect(() => {
-        const element = viewport.current;
-
-        if (!element) {
-            return;
-        }
-
-        // A non-passive listener, so a pinch or scroll moves the board instead of the page.
-        const onWheel = (event: WheelEvent) => {
-            event.preventDefault();
-            moved.current = true;
-
-            const bounds = element.getBoundingClientRect();
-            const pointX = event.clientX - bounds.left;
-            const pointY = event.clientY - bounds.top;
-
-            setView((current) => {
-                if (!event.ctrlKey && !event.metaKey) {
-                    return { ...current, x: current.x - event.deltaX, y: current.y - event.deltaY };
-                }
-
-                const zoom = Math.min(
-                    MAX_ZOOM,
-                    Math.max(MIN_ZOOM, current.zoom * Math.exp(-event.deltaY / 200)),
-                );
-                const ratio = zoom / current.zoom;
-
-                return {
-                    x: pointX - (pointX - current.x) * ratio,
-                    y: pointY - (pointY - current.y) * ratio,
-                    zoom,
-                };
-            });
-        };
-
-        element.addEventListener('wheel', onWheel, { passive: false });
-
-        return () => element.removeEventListener('wheel', onWheel);
-    }, []);
-
-    const zoomBy = (factor: number) => {
-        const element = viewport.current;
-
-        if (!element) {
-            return;
-        }
-
-        moved.current = true;
-        setView((current) => {
-            const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, current.zoom * factor));
-            const centerX = element.clientWidth / 2;
-            const centerY = element.clientHeight / 2;
-            const ratio = zoom / current.zoom;
-
-            return {
-                x: centerX - (centerX - current.x) * ratio,
-                y: centerY - (centerY - current.y) * ratio,
-                zoom,
-            };
-        });
-    };
-
-    return (
-        <div
-            aria-label="Wireframes"
-            className={`relative cursor-grab overflow-hidden bg-canvas bg-[radial-gradient(var(--line)_1px,transparent_1px)] bg-size-[18px_18px] active:cursor-grabbing ${framed ? 'h-[clamp(300px,46vh,560px)] rounded-xl border border-line' : 'h-[clamp(320px,52vh,640px)] border-y border-line'}`}
-            onPointerDown={(event) => {
-                if ((event.target as HTMLElement).closest('button')) {
-                    return;
-                }
-
-                event.currentTarget.setPointerCapture(event.pointerId);
-                drag.current = { x: event.clientX, y: event.clientY };
-            }}
-            onPointerMove={(event) => {
-                const start = drag.current;
-
-                if (!start) {
-                    return;
-                }
-
-                drag.current = { x: event.clientX, y: event.clientY };
-                moved.current = true;
-                setView((current) => ({
-                    ...current,
-                    x: current.x + event.clientX - start.x,
-                    y: current.y + event.clientY - start.y,
-                }));
-            }}
-            onPointerUp={() => (drag.current = null)}
-            ref={viewport}
-            role="region"
-        >
-            <div
-                className="absolute top-0 left-0 origin-top-left"
-                style={{
-                    height: layout.height,
-                    transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`,
-                    width: layout.width,
-                }}
-            >
-                <BoardContent canvas={canvas} layout={layout} />
-            </div>
-            <div className="absolute bottom-3 left-3 flex items-center gap-0.5 rounded-lg border border-line bg-panel p-0.5 text-[12px] shadow-sm">
-                <button
-                    aria-label="Zoom out"
-                    className="h-6 w-6 rounded-md hover:bg-hover"
-                    onClick={() => zoomBy(1 / 1.25)}
-                    type="button"
-                >
-                    −
-                </button>
-                <span className="w-11 text-center font-mono" title="Zoom">
-                    {Math.round(view.zoom * 100)}%
-                </span>
-                <button
-                    aria-label="Zoom in"
-                    className="h-6 w-6 rounded-md hover:bg-hover"
-                    onClick={() => zoomBy(1.25)}
-                    type="button"
-                >
-                    +
-                </button>
-                <button
-                    className="h-6 rounded-md px-2 text-muted hover:bg-hover hover:text-fg"
-                    onClick={fit}
-                    title="Fit every screen in view"
-                    type="button"
-                >
-                    Fit
-                </button>
-            </div>
-        </div>
-    );
-}
-
 function BoardContent({ canvas, layout }: { canvas: VisualCanvas; layout: CanvasLayout }) {
     return (
         <>
@@ -375,6 +186,31 @@ function BoardContent({ canvas, layout }: { canvas: VisualCanvas; layout: Canvas
                 </div>
             ))}
         </>
+    );
+}
+
+function CanvasBoard({
+    canvas,
+    framed,
+    layout,
+}: {
+    canvas: VisualCanvas;
+    framed: boolean;
+    layout: CanvasLayout;
+}) {
+    return (
+        <Board
+            className={
+                framed
+                    ? 'h-[clamp(300px,46vh,560px)] rounded-xl border border-line'
+                    : 'h-[clamp(320px,52vh,640px)] border-y border-line'
+            }
+            height={layout.height}
+            label="Wireframes"
+            width={layout.width}
+        >
+            <BoardContent canvas={canvas} layout={layout} />
+        </Board>
     );
 }
 
