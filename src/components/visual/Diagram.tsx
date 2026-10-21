@@ -2,7 +2,8 @@ import { useId, useMemo } from 'react';
 
 import type { VisualChange, VisualDiagram } from '../../lib/types';
 
-import { layoutDiagram, type PlacedNode } from '../../lib/visual';
+import { type DiagramLayout, layoutDiagram, type PlacedNode } from '../../lib/visual';
+import { Board } from './Board';
 import { Inline } from './Markdown';
 import { useVisual } from './mode';
 
@@ -13,6 +14,8 @@ const NODE_TONES: Record<VisualChange, { fill: string; stroke: string }> = {
     removed: { fill: 'var(--del-bg)', stroke: 'var(--del)' },
     renamed: { fill: 'var(--panel)', stroke: 'var(--accent-line)' },
 };
+
+const BOARD_PADDING = 16;
 
 const EDGE_STROKES: Record<VisualChange, string> = {
     '': 'var(--muted)',
@@ -26,6 +29,14 @@ export function Diagram({ diagram }: { diagram: VisualDiagram }) {
     const layout = useMemo(() => layoutDiagram(diagram), [diagram]);
     const marker = useId().replace(/:/g, '');
     const { mode } = useVisual();
+    const drawing = (
+        <DiagramDrawing
+            fixed={mode === 'app'}
+            label={diagram.title || 'Diagram'}
+            layout={layout}
+            marker={marker}
+        />
+    );
 
     return (
         <figure className="m-0 flex flex-col gap-2">
@@ -34,86 +45,116 @@ export function Diagram({ diagram }: { diagram: VisualDiagram }) {
                     <Inline text={diagram.title} />
                 </figcaption>
             )}
-            <div className="overflow-x-auto rounded-xl border border-line bg-canvas p-2">
-                <svg
-                    aria-label={diagram.title || 'Diagram'}
-                    className={`mx-auto block h-auto ${mode === 'app' ? '' : 'max-w-full'}`}
-                    role="img"
-                    style={{ width: layout.width }}
-                    viewBox={`0 0 ${layout.width} ${layout.height}`}
+            {mode === 'app' ? (
+                <Board
+                    className="rounded-xl border border-line"
+                    height={layout.height + BOARD_PADDING * 2}
+                    label={diagram.title || 'Diagram'}
+                    style={{
+                        height: `min(${layout.height + BOARD_PADDING * 2 + 48}px, clamp(320px, 60vh, 720px))`,
+                    }}
+                    width={layout.width + BOARD_PADDING * 2}
                 >
-                    <defs>
-                        {Object.entries(EDGE_STROKES).map(([change, stroke]) => (
-                            <marker
-                                id={`${marker}-${change || 'none'}`}
-                                key={change}
-                                markerHeight="8"
-                                markerWidth="8"
-                                orient="auto-start-reverse"
-                                refX="7"
-                                refY="4"
-                            >
-                                <path d="M0,0 L8,4 L0,8 z" fill={stroke} />
-                            </marker>
-                        ))}
-                    </defs>
-                    {layout.groups.map((group) => (
-                        <g key={group.label}>
-                            <rect
-                                fill="none"
-                                height={group.height}
-                                rx="12"
-                                stroke="var(--line)"
-                                strokeDasharray="4 4"
-                                width={group.width}
-                                x={group.x}
-                                y={group.y}
-                            />
-                            <text
-                                fill="var(--muted)"
-                                fontSize="10.5"
-                                fontWeight="600"
-                                letterSpacing="0.06em"
-                                x={group.x + 12}
-                                y={group.y + 17}
-                            >
-                                {group.label.toUpperCase()}
-                            </text>
-                        </g>
-                    ))}
-                    {layout.edges.map((edge, index) => (
-                        <g key={index}>
-                            <path
-                                d={edgePath(edge.points)}
-                                fill="none"
-                                markerEnd={`url(#${marker}-${edge.change || 'none'})`}
-                                stroke={EDGE_STROKES[edge.change]}
-                                strokeDasharray={edge.change === 'removed' ? '5 4' : undefined}
-                                strokeWidth="1.4"
-                            />
-                            {edge.label && (
-                                <text
-                                    dominantBaseline="middle"
-                                    fill="var(--muted)"
-                                    fontSize="11"
-                                    paintOrder="stroke"
-                                    stroke="var(--canvas)"
-                                    strokeWidth="4"
-                                    textAnchor="middle"
-                                    x={edge.labelX}
-                                    y={edge.labelY}
-                                >
-                                    {edge.label}
-                                </text>
-                            )}
-                        </g>
-                    ))}
-                    {layout.nodes.map((node) => (
-                        <DiagramNode key={node.id} node={node} />
-                    ))}
-                </svg>
-            </div>
+                    <div style={{ padding: BOARD_PADDING }}>{drawing}</div>
+                </Board>
+            ) : (
+                <div className="rounded-xl border border-line bg-canvas p-2">{drawing}</div>
+            )}
         </figure>
+    );
+}
+
+function DiagramDrawing({
+    fixed,
+    label,
+    layout,
+    marker,
+}: {
+    fixed: boolean;
+    label: string;
+    layout: DiagramLayout;
+    marker: string;
+}) {
+    return (
+        <svg
+            aria-label={label}
+            className={`mx-auto block ${fixed ? '' : 'h-auto max-w-full'}`}
+            height={fixed ? layout.height : undefined}
+            role="img"
+            style={fixed ? undefined : { width: layout.width }}
+            viewBox={`0 0 ${layout.width} ${layout.height}`}
+            width={fixed ? layout.width : undefined}
+        >
+            <defs>
+                {Object.entries(EDGE_STROKES).map(([change, stroke]) => (
+                    <marker
+                        id={`${marker}-${change || 'none'}`}
+                        key={change}
+                        markerHeight="8"
+                        markerWidth="8"
+                        orient="auto-start-reverse"
+                        refX="7"
+                        refY="4"
+                    >
+                        <path d="M0,0 L8,4 L0,8 z" fill={stroke} />
+                    </marker>
+                ))}
+            </defs>
+            {layout.groups.map((group) => (
+                <g key={group.label}>
+                    <rect
+                        fill="none"
+                        height={group.height}
+                        rx="12"
+                        stroke="var(--line)"
+                        strokeDasharray="4 4"
+                        width={group.width}
+                        x={group.x}
+                        y={group.y}
+                    />
+                    <text
+                        fill="var(--muted)"
+                        fontSize="10.5"
+                        fontWeight="600"
+                        letterSpacing="0.06em"
+                        x={group.x + 12}
+                        y={group.y + 17}
+                    >
+                        {group.label.toUpperCase()}
+                    </text>
+                </g>
+            ))}
+            {layout.edges.map((edge, index) => (
+                <g key={index}>
+                    <path
+                        d={edgePath(edge.points)}
+                        fill="none"
+                        markerEnd={`url(#${marker}-${edge.change || 'none'})`}
+                        stroke={EDGE_STROKES[edge.change]}
+                        strokeDasharray={edge.change === 'removed' ? '5 4' : undefined}
+                        strokeWidth="1.4"
+                    />
+                    {edge.label && (
+                        <text
+                            dominantBaseline="middle"
+                            fill="var(--muted)"
+                            fontSize="11"
+                            paintOrder="stroke"
+                            stroke="var(--canvas)"
+                            strokeWidth="4"
+                            textAnchor="middle"
+                            x={edge.labelX}
+                            y={edge.labelY}
+                        >
+                            {edge.label}
+                        </text>
+                    )}
+                </g>
+            ))}
+            {layout.nodes.map((node) => (
+                <DiagramNode key={node.id} node={node} />
+            ))}
+        </svg>
     );
 }
 
@@ -124,6 +165,7 @@ function DiagramNode({ node }: { node: PlacedNode }) {
 
     return (
         <g>
+            <title>{node.detail ? `${node.label} — ${node.detail}` : node.label}</title>
             <rect
                 fill={tone.fill}
                 height={node.height}
