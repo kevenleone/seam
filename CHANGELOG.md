@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/kevenleone/seam/compare/v0.9.0...v0.10.0) (2026-10-21)
+
+
+### Features
+
+* **visual:** pan, zoom and fit diagrams on a board ([4a85505](https://github.com/kevenleone/seam/commit/4a85505a7f31cf793b7be2ba5b193bb8720f8716))
+
 ## [0.9.0](https://github.com/kevenleone/seam/compare/v0.8.0...v0.9.0) (2026-10-20)
 
 
