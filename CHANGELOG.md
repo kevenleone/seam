@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.0](https://github.com/kevenleone/seam/compare/v0.10.0...v0.11.0) (2026-10-23)
+
+
+### Features
+
+* **diff:** keep the file header pinned while scrolling its lines ([bcc6434](https://github.com/kevenleone/seam/commit/bcc64340a1b91c2285a7e52bf21e40c8fb4650b4))
+
 ## [0.10.0](https://github.com/kevenleone/seam/compare/v0.9.0...v0.10.0) (2026-10-21)
 
 
