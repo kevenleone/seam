@@ -1,4 +1,4 @@
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ReviewFocus } from '../lib/store';
@@ -34,6 +34,8 @@ const Highlighted = createContext<null | WeakMap<DiffLine, string>>(null);
 
 /** Above this many lines a diff is shown plain: highlighting it would stall the window. */
 const HIGHLIGHT_LIMIT = 20_000;
+
+const FILE_HEADER_HEIGHT = 36;
 
 interface LoadedImage {
     bytes: number;
@@ -198,7 +200,7 @@ export function DiffView({
         count: rows.length,
         estimateSize: (index) =>
             rows[index].t === 'file'
-                ? 36
+                ? FILE_HEADER_HEIGHT
                 : rows[index].t === 'hunk'
                   ? 32
                   : rows[index].t === 'note'
@@ -211,6 +213,14 @@ export function DiffView({
         getScrollElement: () => scrollRef.current,
         overscan: 30,
     });
+
+    const [scrollTop, setScrollTop] = useState(0);
+    const fileRows = useMemo(
+        () => rows.flatMap((row, index) => (row.t === 'file' ? [index] : [])),
+        [rows],
+    );
+    const stuck = stickyFile(fileRows, virtualizer.measurementsCache, scrollTop);
+    const stuckRow = stuck && rows[stuck.index];
 
     const focus = comments?.focus;
 
@@ -257,12 +267,29 @@ export function DiffView({
         <Highlighted.Provider value={highlighted}>
             <div
                 className={`relative overflow-auto ${maxHeight ? '' : 'min-h-0 flex-1'}`}
+                onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}
                 ref={scrollRef}
                 style={{
                     fontSize: codeSize,
                     height: maxHeight && Math.min(maxHeight, virtualizer.getTotalSize()),
                 }}
             >
+                {stuck && stuckRow?.t === 'file' && (
+                    <div className="sticky top-0 left-0 z-10 h-0">
+                        <div style={{ transform: `translateY(${stuck.offset}px)` }}>
+                            <FileHeader
+                                collapsed={false}
+                                diff={stuckRow.diff}
+                                onToggle={() => {
+                                    toggleFile(
+                                        stuckRow.diff.newPath ?? stuckRow.diff.oldPath ?? '',
+                                    );
+                                    virtualizer.scrollToIndex(stuck.index, { align: 'start' });
+                                }}
+                            />
+                        </div>
+                    </div>
+                )}
                 <div
                     className="font-mono"
                     style={{
@@ -573,6 +600,33 @@ function splitRows(hunk: Hunk): Row[] {
     flush();
 
     return rows;
+}
+
+/** The file whose header has scrolled out of view, and how far the next header pushes it up. */
+function stickyFile(
+    fileRows: number[],
+    measurements: VirtualItem[],
+    scrollTop: number,
+): { index: number; offset: number } | null {
+    let current = -1;
+
+    while (
+        current + 1 < fileRows.length &&
+        (measurements[fileRows[current + 1]]?.start ?? Infinity) < scrollTop
+    ) {
+        current++;
+    }
+
+    if (current < 0) {
+        return null;
+    }
+
+    const next = measurements[fileRows[current + 1]]?.start ?? Infinity;
+
+    return {
+        index: fileRows[current],
+        offset: Math.min(0, next - scrollTop - FILE_HEADER_HEIGHT),
+    };
 }
 
 const styles = {
