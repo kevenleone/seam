@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/kevenleone/seam/compare/v0.11.0...v0.11.1) (2026-11-14)
+
+
+### Bug Fixes
+
+* **cli:** diff the files a git difftool dir diff links to ([2fda8bf](https://github.com/kevenleone/seam/commit/2fda8bf0494ef4da7fbe88e6da58ffff7a082d40))
+
 ## [0.11.0](https://github.com/kevenleone/seam/compare/v0.10.0...v0.11.0) (2026-10-23)
 
 
