@@ -76,6 +76,11 @@ export interface CommitFileStat {
     path: string;
 }
 
+export interface CommitMessage {
+    body: string;
+    summary: string;
+}
+
 export type ConflictSide = 'ours' | 'theirs';
 
 export interface Detail {
@@ -172,7 +177,6 @@ export type InProgress =
     | { kind: 'cherryPick' }
     | { kind: 'merge' }
     | { kind: 'revert' };
-
 export type LineAction = 'discard' | 'stage' | 'unstage';
 export type LineKind = 'addition' | 'context' | 'deletion' | 'noNewline';
 export interface NotifyPrefs {
@@ -218,6 +222,7 @@ export type Op =
     | { type: 'stageAll' }
     | { type: 'uncommit' }
     | { type: 'unstageAll' };
+
 export interface Outcome {
     message: string;
     undoable: boolean;

@@ -84,10 +84,15 @@ const kindName: Record<ChangeKind, string> = {
 
 function CommitPanel() {
     const s = useRepo();
-    const { amend, body, busy, lastCommit, meta, status, summary } = s;
+    const { amend, body, busy, lastCommit, meta, status, summary, writingMessage } = s;
     const staged = status.staged.length;
     const canCommit =
-        !!summary.trim() && (amend || staged > 0) && !status.conflicted.length && !busy;
+        !!summary.trim() &&
+        (amend || staged > 0) &&
+        !status.conflicted.length &&
+        !busy &&
+        !writingMessage;
+    const canWrite = (amend || staged > 0) && !writingMessage;
     const lastPushed = lastCommit
         ? isPushed(meta, lastCommit.sha) && !!status.branch.upstream
         : false;
@@ -116,26 +121,47 @@ function CommitPanel() {
                 </Button>
             </div>
             <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between text-[12px] text-muted">
+                <div className="flex items-center justify-between text-[12px] text-muted">
                     <label htmlFor="summary">Summary</label>
                     <span className={`font-mono ${summary.length > 72 ? 'text-del' : ''}`}>
                         {summary.length} / 72
                     </span>
                 </div>
                 <input
-                    className="h-9 rounded-[7px] border border-control-line bg-app px-2.5 outline-none focus:border-accent"
+                    className="h-9 rounded-[7px] border border-control-line bg-app px-2.5 outline-none focus:border-accent disabled:opacity-60"
+                    disabled={writingMessage}
                     id="summary"
                     onChange={(event) => s.set({ summary: event.target.value })}
-                    placeholder="What does this change do?"
+                    placeholder={writingMessage ? 'Writing…' : 'What does this change do?'}
                     value={summary}
                 />
+                <Button
+                    className="self-start"
+                    disabled={!canWrite}
+                    onClick={() => void s.writeMessage()}
+                    size="sm"
+                    title={
+                        amend || staged
+                            ? 'Write the summary and description from the staged changes, using the AI chosen in Settings › AI. What you typed is kept as a hint.'
+                            : 'Stage changes to write a message for them.'
+                    }
+                    variant="ghost"
+                >
+                    <Icon
+                        className={writingMessage ? 'animate-pulse text-accent' : 'text-accent'}
+                        name="sparkle"
+                        size={13}
+                    />
+                    {writingMessage ? 'Writing message…' : 'Generate with AI'}
+                </Button>
             </div>
             <div className="flex flex-col gap-1.5">
                 <label className="text-[12px] text-muted" htmlFor="description">
                     Description
                 </label>
                 <textarea
-                    className="resize-y rounded-[7px] border border-control-line bg-app px-2.5 py-2 leading-normal outline-none focus:border-accent"
+                    className="resize-y rounded-[7px] border border-control-line bg-app px-2.5 py-2 leading-normal outline-none focus:border-accent disabled:opacity-60"
+                    disabled={writingMessage}
                     id="description"
                     onChange={(event) => s.set({ body: event.target.value })}
                     rows={6}
