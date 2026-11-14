@@ -6,6 +6,7 @@ import type {
     AiConfig,
     CliStatus,
     Commit,
+    CommitMessage,
     Detail,
     DiffSource,
     Drift,
@@ -49,6 +50,8 @@ export const api = {
     closeOpenedReview: (root: string) => invoke<void>('close_opened_review', { root }),
     commitDetail: (root: string, sha: string, ignoreWhitespace: boolean) =>
         invoke<Detail>('commit_detail', { ignoreWhitespace, root, sha }),
+    commitMessage: (root: string, amend: boolean, draft: string) =>
+        invoke<CommitMessage>('commit_message', { amend, draft, root }),
     /** Resolves `false` when the save panel was dismissed. */
     exportVisual: (name: string, extension: string, contents: string) =>
         invoke<boolean>('export_visual', { contents, extension, name }),

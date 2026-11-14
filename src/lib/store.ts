@@ -126,6 +126,8 @@ interface Actions {
     toggleLine(hunk: number, line: number, range: boolean): void;
     undo(): void;
     viewHistory(ref: string): void;
+    /** Fills the summary and description from what is staged, with the configured AI. */
+    writeMessage(): Promise<void>;
 }
 
 interface State {
@@ -178,6 +180,7 @@ interface State {
     tab: Tab;
     toast: null | Toast;
     visualKind: VisualKind;
+    writingMessage: boolean;
 }
 
 let queue: Promise<void> = Promise.resolve();
@@ -743,6 +746,28 @@ export const useRepo = create<RepoStore>()((set, get) => {
         },
 
         visualKind: 'recap',
+        async writeMessage() {
+            const { amend, body, root, status, summary, writingMessage } = get();
+
+            if (writingMessage || (!amend && !status.staged.length)) {
+                return;
+            }
+
+            set({ writingMessage: true });
+
+            try {
+                const draft = [summary.trim(), body.trim()].filter(Boolean).join('\n\n');
+                const message = await api.commitMessage(root, amend, draft);
+
+                set({ body: message.body, summary: message.summary });
+            } catch (error) {
+                get().notify(errorMessage(error));
+            } finally {
+                set({ writingMessage: false });
+            }
+        },
+
+        writingMessage: false,
     };
 
     async function findBase() {

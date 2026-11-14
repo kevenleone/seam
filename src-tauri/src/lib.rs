@@ -5,6 +5,7 @@ pub mod forge;
 pub mod git;
 pub mod handoff;
 pub mod mcp;
+pub mod message;
 mod notify;
 pub mod overview;
 mod prefs;
@@ -1450,6 +1451,18 @@ async fn test_ai(prefs: State<'_, PrefsStore>) -> CmdResult<TestResult> {
     ai::test(&config).await
 }
 
+/// A commit message for what is staged, written by the configured AI; `draft` is what the user typed so far.
+#[tauri::command]
+async fn commit_message(
+    prefs: State<'_, PrefsStore>,
+    root: String,
+    amend: bool,
+    draft: String,
+) -> CmdResult<message::CommitMessage> {
+    let config = prefs.ai();
+    message::run(&config, Path::new(&root), amend, &draft).await
+}
+
 #[tauri::command]
 async fn review_state(app: AppHandle, root: String) -> ReviewState {
     review_state_for(&app, Path::new(&root)).await
@@ -1778,6 +1791,7 @@ pub fn run() {
             set_ai_key,
             clear_ai_key,
             test_ai,
+            commit_message,
             review_state,
             start_review,
             cancel_review,
