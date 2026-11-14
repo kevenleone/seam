@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::git::process::{git, RunOptions};
 use crate::git::Result;
@@ -54,6 +54,70 @@ async fn config(location: &[&str], args: &[&str], allow_failure: bool) -> Result
 
 /// The two sides git hands a difftool, as one patch named by the repository's own paths.
 pub async fn patch(cwd: &Path, left: &str, right: &str, merged: Option<&str>) -> Result<String> {
+    if !(Path::new(left).is_dir() && Path::new(right).is_dir()) {
+        return diff(cwd, left, right, merged, false).await;
+    }
+    // `--dir-diff` links working-tree files into its folders, and `--no-index` would
+    // compare those links rather than the files they point to.
+    let mirror = Mirror::new()?;
+    let (left_copy, right_copy) = (mirror.0.join("left"), mirror.0.join("right"));
+    copy_resolved(Path::new(left), &left_copy)?;
+    copy_resolved(Path::new(right), &right_copy)?;
+    diff(
+        cwd,
+        &left_copy.to_string_lossy(),
+        &right_copy.to_string_lossy(),
+        merged,
+        true,
+    )
+    .await
+}
+
+struct Mirror(PathBuf);
+
+impl Mirror {
+    fn new() -> Result<Self> {
+        let root = std::env::temp_dir().join(format!("seam-difftool-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).map_err(io_error)?;
+        Ok(Self(root))
+    }
+}
+
+impl Drop for Mirror {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn copy_resolved(from: &Path, to: &Path) -> Result<()> {
+    std::fs::create_dir_all(to).map_err(io_error)?;
+    for entry in std::fs::read_dir(from).map_err(io_error)? {
+        let entry = entry.map_err(io_error)?;
+        let (source, target) = (entry.path(), to.join(entry.file_name()));
+        let Ok(metadata) = std::fs::metadata(&source) else {
+            continue;
+        };
+        if metadata.is_dir() {
+            copy_resolved(&source, &target)?;
+        } else {
+            std::fs::copy(&source, &target).map_err(io_error)?;
+        }
+    }
+    Ok(())
+}
+
+fn io_error(error: std::io::Error) -> crate::git::GitError {
+    crate::git::GitError::new(error.to_string())
+}
+
+async fn diff(
+    cwd: &Path,
+    left: &str,
+    right: &str,
+    merged: Option<&str>,
+    both_folders: bool,
+) -> Result<String> {
     let output = git(
         cwd,
         &[
@@ -76,7 +140,6 @@ pub async fn patch(cwd: &Path, left: &str, right: &str, merged: Option<&str>) ->
     if output.code > 1 {
         return Err(crate::git::GitError::new(output.stderr.trim().to_string()));
     }
-    let both_folders = Path::new(left).is_dir() && Path::new(right).is_dir();
     Ok(relabel(&output.text(), left, right, merged, both_folders))
 }
 
@@ -89,7 +152,7 @@ pub fn relabel(
     merged: Option<&str>,
     both_folders: bool,
 ) -> String {
-    let sides = [left.trim_start_matches('/'), right.trim_start_matches('/')];
+    let sides = [left, right].map(|path| path.trim_start_matches('/').trim_end_matches('/'));
     let name = merged.unwrap_or(sides[1]);
     let rename = |path: &str| -> String {
         for side in sides {
@@ -170,6 +233,60 @@ mod tests {
         );
         assert!(out.contains("diff --git a/new.ts b/new.ts\n"));
         assert!(out.contains("--- /dev/null\n+++ b/new.ts\n"));
+    }
+
+    #[tokio::test]
+    async fn diffs_the_files_a_dir_diff_links_to() {
+        let dir = tempfile::tempdir().unwrap();
+        let repo = dir.path().join("repo");
+        let capture = dir.path().join("sides");
+        std::fs::create_dir_all(repo.join("src")).unwrap();
+        let run = |args: &[&str]| {
+            let status = std::process::Command::new("git")
+                .args(["-c", "user.name=T", "-c", "user.email=t@t"])
+                .args(args)
+                .current_dir(&repo)
+                .status()
+                .unwrap();
+            assert!(status.success());
+        };
+        run(&["init", "-q"]);
+        std::fs::write(repo.join("src/f.rs"), "a\nb\n").unwrap();
+        run(&["add", "."]);
+        run(&["commit", "-qm", "init"]);
+        std::fs::write(repo.join("src/f.rs"), "a\nc\n").unwrap();
+
+        let keep = format!(
+            "mkdir -p {0} && cp -R \"$LOCAL\" {0}/left && cp -R \"$REMOTE\" {0}/right && echo \"$LOCAL\" > {0}/args",
+            capture.display()
+        );
+        run(&[
+            "-c",
+            &format!("difftool.k.cmd={keep}"),
+            "difftool",
+            "-d",
+            "-t",
+            "k",
+        ]);
+        assert!(std::fs::symlink_metadata(capture.join("right/src/f.rs"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+
+        let text = patch(
+            &repo,
+            &format!("{}/", capture.join("left").display()),
+            &format!("{}/", capture.join("right").display()),
+            None,
+        )
+        .await
+        .unwrap();
+        assert!(
+            text.starts_with("diff --git a/src/f.rs b/src/f.rs\n"),
+            "{text}"
+        );
+        assert!(text.contains("-b\n+c\n"), "{text}");
+        assert!(!text.contains("new file mode"), "{text}");
     }
 
     #[test]
