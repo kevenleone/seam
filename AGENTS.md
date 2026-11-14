@@ -94,6 +94,11 @@ it leniently. The last review is saved in `.git/seam/review.json`.
 `SEAM_LIVE_AI=claude cargo test --test review -- --ignored` runs a real model
 end to end; any provider id works there.
 
+`src/message.rs` writes a commit message for the commit panel's "Generate with
+AI": the staged diff (against `HEAD^` when amending), the recent subjects so it
+follows the repository's conventions, and whatever the user already typed as a
+hint. It only fills the fields; nothing is committed, so it has no undo.
+
 `src/visual.rs` is the Visual tab on the same footing: a recap of the review's
 scope, or a plan for a change the user describes, asked for as one JSON document
 of typed blocks (wireframe screens, diagrams, decisions, contracts, key diffs,
