@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.12.0](https://github.com/kevenleone/seam/compare/v0.11.1...v0.12.0) (2026-11-16)
+
+
+### Features
+
+* **commit:** generate the commit message with AI ([2048c6f](https://github.com/kevenleone/seam/commit/2048c6f394070435aa25da70876aa14b070817d7))
+
+
+### Documentation
+
+* describe the AI commit message module ([c5c0872](https://github.com/kevenleone/seam/commit/c5c08729c6c85530ca2fb9b32ca8026e08ceab8c))
+
 ## [0.11.1](https://github.com/kevenleone/seam/compare/v0.11.0...v0.11.1) (2026-11-14)
 
 
